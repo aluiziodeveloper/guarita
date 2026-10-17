@@ -214,3 +214,37 @@ func toolCall(message Message) (domain.Call, bool, error) {
 }
 
 // #endregion
+
+// metaVersion é a chave de _meta com a revisão do protocolo do pedido.
+const metaVersion = "io.modelcontextprotocol/protocolVersion"
+
+// #region mcpproxy-mirrored
+// Mirrored são os campos do corpo que a revisão 2026-07-28 espelha em
+// cabeçalhos HTTP: a versão em _meta e o nome em params.name ou uri.
+type Mirrored struct {
+	Version string
+	Name    string
+	HasName bool // tools/call, prompts/get e resources/read têm nome
+}
+
+// Mirrored lê os campos espelhados. O corpo continua a fonte de
+// verdade; quem compara com os cabeçalhos é o adaptador HTTP.
+func (message Message) Mirrored() Mirrored {
+	var params struct {
+		Name string                     `json:"name"`
+		URI  string                     `json:"uri"`
+		Meta map[string]json.RawMessage `json:"_meta"`
+	}
+	_ = json.Unmarshal(message.Params, &params) // forma já conferida
+	mirrored := Mirrored{}
+	_ = json.Unmarshal(params.Meta[metaVersion], &mirrored.Version)
+	switch message.Method {
+	case "tools/call", "prompts/get":
+		mirrored.Name, mirrored.HasName = params.Name, true
+	case "resources/read":
+		mirrored.Name, mirrored.HasName = params.URI, true
+	}
+	return mirrored
+}
+
+// #endregion

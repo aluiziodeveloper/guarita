@@ -142,6 +142,12 @@ func (h *Handler) post(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, replyStatus(reply), reply)
 		return
 	}
+	message, _ := mcpproxy.ParseMessage(body) // a porta já o aceitou
+	if err := checkMirrored(r.Header, message); err != nil {
+		writeErrorID(w, http.StatusBadRequest, message.ID,
+			codeHeaderMismatch, err.Error())
+		return
+	}
 	out := r.Clone(ctx) // o pedido recebido não é alterado
 	out.Body = io.NopCloser(bytes.NewReader(body))
 	out.ContentLength = int64(len(body))
@@ -223,9 +229,19 @@ type errorResponse struct {
 // writeError responde com um erro JSON-RPC sem id, como a especificação
 // prevê para o que a Guarita recusa antes de ler a mensagem.
 func writeError(w http.ResponseWriter, status, code int, text string) {
-	body, _ := json.Marshal(errorResponse{
-		JSONRPC: "2.0", Error: rpcError{code, text},
-	})
+	writeErrorID(w, status, nil, code, text)
+}
+
+// writeErrorID responde com o erro ligado ao id do pedido, quando há um.
+func writeErrorID(
+	w http.ResponseWriter, status int, id json.RawMessage, code int,
+	text string,
+) {
+	response := errorResponse{JSONRPC: "2.0", Error: rpcError{code, text}}
+	if len(id) > 0 {
+		response.ID = id
+	}
+	body, _ := json.Marshal(response)
 	writeJSON(w, status, append(body, '\n'))
 }
 
