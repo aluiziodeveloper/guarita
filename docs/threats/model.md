@@ -1,6 +1,6 @@
 # Modelo de ameaças da Guarita — v1
 
-- **Versão:** v1, Capítulo 3 do livro (*tag* `cap03`); ameaça `dns-rebinding` acrescentada no Capítulo 7 (*tag* `cap07`), quando a Guarita passou a escutar na rede.
+- **Versão:** v1, Capítulo 3 do livro (*tag* `cap03`); ameaça `dns-rebinding` acrescentada no Capítulo 7 (*tag* `cap07`), quando a Guarita passou a escutar na rede; `credential-theft` parcialmente mitigada no Capítulo 8 (*tag* `cap08`).
 - **Método:** zonas e fronteiras de confiança, STRIDE por ameaça e árvores de ataque em [`trees.md`](trees.md).
 - **Fonte de verdade:** a tabela de ameaças deste arquivo e a função `threatmodel.Model()` precisam coincidir; o teste `TestModelo_coincideComODocumento` quebra a CI quando divergem.
 
@@ -60,7 +60,7 @@ Estado `open` significa que a Guarita ainda não tem a defesa. A conferência op
 | `excessive-agency` | Agência excessiva | elevation-of-privilege | agent->guarita | 11 | open |
 | `data-exfiltration` | Exfiltração de dados nos argumentos | information-disclosure | guarita->mcp-server | 13 | open |
 | `sandbox-escape` | Fuga da sandbox do servidor | elevation-of-privilege | guarita->mcp-server | 17 | open |
-| `credential-theft` | Repasse ou roubo de credenciais (*confused deputy*) | spoofing, information-disclosure | guarita->mcp-server | 8 | open |
+| `credential-theft` | Repasse ou roubo de credenciais (*confused deputy*) | spoofing, information-disclosure | guarita->mcp-server | 8 | partially-mitigated |
 | `supply-chain` | Pacote de servidor comprometido | tampering | operator->mcp-server | 20 | open |
 | `resource-abuse` | Laços de chamadas que esgotam cota ou custo | denial-of-service | agent->guarita | 18 | open |
 | `insecure-parsing` | Mensagem malformada ou ambígua no protocolo | tampering, denial-of-service | agent->guarita | 6 | partially-mitigated |
@@ -72,7 +72,8 @@ Estado `open` significa que a Guarita ainda não tem a defesa. A conferência op
 | ID | Desde | O que cobre | Testes de ataque | O que falta |
 |---|---|---|---|---|
 | `insecure-parsing` | Capítulo 6 | Parser estrito das mensagens do agente: um valor por mensagem, sem chave repetida, sem lote, UTF-8, aninhamento e tamanho limitados. No stdio desde o Capítulo 6; nos POST do transporte HTTP desde o Capítulo 7, com corpo limitado a 4 MiB e prazo de leitura | `internal/adapters/mcpproxy`: contrabando, chave duplicada, mensagem grande, golden e fuzzing; `internal/adapters/mcphttp`: contrato com contrabando, corpo grande e corpo lento | Respostas do servidor (desafio do Capítulo 6) |
-| `dns-rebinding` | Capítulo 7 | `Host` de todo pedido contra a lista derivada do endereço de escuta; `Origin`, quando vem, contra uma lista exata; escuta em loopback por padrão; 403 com erro JSON-RPC | `internal/adapters/mcphttp`: guarda, contrato e integração; `deploy/rebinding-lab.sh` com `curl --resolve` | Autenticação do agente (Capítulo 8); fora do loopback, a proteção depende da lista em `-host` |
+| `dns-rebinding` | Capítulo 7 | `Host` de todo pedido contra a lista derivada do endereço de escuta; `Origin`, quando vem, contra uma lista exata; escuta em loopback por padrão; 403 com erro JSON-RPC | `internal/adapters/mcphttp`: guarda, contrato e integração; `deploy/rebinding-lab.sh` com `curl --resolve` | Fora do loopback, a proteção depende da lista em `-host`; desde o Capítulo 8, a Guarita também exige o *token* do agente nesse caso |
+| `credential-theft` | Capítulo 8 | No transporte HTTP: *token* do agente verificado (Ed25519, emissor, audiência igual ao recurso da Guarita, validade); repasse só dos cabeçalhos permitidos; credencial própria da Guarita para o servidor; segredos com tipo que se redige nos registros | `internal/adapters/identity` (audiência, algoritmo, `alg none`); `internal/adapters/mcphttp`: cabeçalhos permitidos, credencial, *confused deputy*, registro sem segredos | Uma credencial por servidor quando houver vários (Capítulo 10); escopos por ferramenta e agente na política (Capítulo 11); o transporte stdio não tem identidade de agente |
 
 ## A cena do Capítulo 3: o *confused deputy*
 
