@@ -4,10 +4,13 @@
 package guarita.grants
 
 agents := {
-	"relatorios": {"files": {
-		"read_file": "allow",
-		"list_dir": "allow",
-	}},
+	"relatorios": {
+		"files": {
+			"read_file": "allow",
+			"list_dir": "allow",
+		},
+		"mail": {"send_email": "allow"},
+	},
 	"manutencao": {
 		"files": {
 			"read_file": "allow",

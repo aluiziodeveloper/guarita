@@ -57,3 +57,16 @@ test_relatorios_nao_apaga_o_banco if {
 		"tool": "delete_database", "arguments": {},
 	}
 }
+
+test_email_fora_de_lab_pede_aprovacao if {
+	guarita.decision == "require_approval" with input as {
+		"agent": "relatorios", "server": "mail", "tool": "send_email",
+		"arguments": {"to": "a@lab.test.example"},
+	}
+}
+
+test_email_sem_destinatario_nega if {
+	guarita.reasons == {"e-mail sem destinatário"} with input as {
+		"tool": "send_email", "arguments": {},
+	}
+}
