@@ -61,13 +61,15 @@ func Model() []Threat {
 	agent, operator := TrustZoneAgent, TrustZoneOperator
 	return []Threat{
 		threat("tool-poisoning", "Envenenamento de ferramenta",
-			edge(in, out), 10, tampering, elevationOfPrivilege),
+			edge(in, out), 10, tampering, elevationOfPrivilege,
+		).with(ThreatStatusPartiallyMitigated),
 		threat("rug-pull", "Troca silenciosa da definição aprovada",
 			edge(in, out), 9, tampering,
 		).with(ThreatStatusPartiallyMitigated),
 		threat("tool-shadowing",
 			"Sombreamento de ferramenta por nome repetido",
-			edge(in, out), 10, spoofing),
+			edge(in, out), 10, spoofing,
+		).with(ThreatStatusPartiallyMitigated),
 		threat("indirect-prompt-injection",
 			"Injeção de prompt indireta na resposta",
 			edge(in, out), 14, tampering, elevationOfPrivilege),

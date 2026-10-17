@@ -10,7 +10,8 @@ OBJETIVO: o agente entrega o conteúdo de ~/.ssh/id_rsa ao atacante
     ├── 1. A instrução hostil chega ao modelo
     │   └── OU
     │       ├── 1.1 Descrição envenenada anunciada desde o início
-    │       │       defesa: varredura de descrições (Cap. 10)
+    │       │       defesa: varredura estrutural antes do pin (Cap. 10,
+    │       │       parcial: pega o texto disfarçado, não o visível)
     │       ├── 1.2 Descrição legítima trocada depois da aprovação
     │       │       defesa: pin por hash (Cap. 9)
     │       └── 1.3 Esquema com parâmetro extra para o conteúdo
@@ -42,7 +43,7 @@ A raiz é um nó **E**: basta cortar um dos quatro ramos para o ataque falhar. P
 | ID | Raiz | Ramos principais | Onde cortar |
 |---|---|---|---|
 | `rug-pull` | Usar uma ferramenta aprovada com outro comportamento | trocar descrição OU esquema OU implementação | hash da definição (Cap. 9); sandbox para a implementação (Cap. 17) |
-| `tool-shadowing` | Fazer o agente chamar a ferramenta errada | nome repetido E escolha pela descrição | namespace por servidor (Cap. 10) |
+| `tool-shadowing` | Fazer o agente chamar a ferramenta errada | nome repetido E escolha pela descrição | namespace por servidor e silhueta única no catálogo (Cap. 10) |
 | `indirect-prompt-injection` | Ordenar o agente pela resposta de uma ferramenta | texto hostil na resposta E o modelo obedecer | inspeção e marcação da resposta (Cap. 14) |
 | `excessive-agency` | Executar ação destrutiva permitida por engano | ferramenta perigosa exposta E nenhuma política restringe | menor privilégio (Cap. 11) |
 | `data-exfiltration` | Levar dados sensíveis num argumento | dado sensível no contexto E argumento sem inspeção | DLP nos argumentos (Cap. 13) |

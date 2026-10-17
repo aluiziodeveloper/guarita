@@ -43,11 +43,12 @@ func TestModel_cobreTodasAsCategoriasSTRIDE(t *testing.T) {
 
 func TestModel_devolveCopiaNova(t *testing.T) {
 	first := Model()
+	status := first[0].Status
 	first[0].Status = ThreatStatusMitigated
 	first[0].Categories[0] = STRIDERepudiation
 
 	second := Model()
-	if second[0].Status != ThreatStatusOpen {
+	if second[0].Status != status {
 		t.Errorf("Status = %s; a mudança vazou entre chamadas",
 			second[0].Status)
 	}
