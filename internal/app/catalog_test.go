@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/aluiziodeveloper/guarita/internal/domain"
@@ -153,6 +154,41 @@ func TestAuthorize_catalogoAntesDaPolitica(t *testing.T) {
 		if !errors.Is(err, want) || (want == nil) != (err == nil) {
 			t.Errorf("%s: %v; want %v", tool, err, want)
 		}
+	}
+}
+
+// #endregion
+
+// flagged acusa um sinal nas definições cuja descrição tem "[LAB]".
+type flagged struct{}
+
+func (flagged) Scan(definition domain.ToolDefinition) []domain.Finding {
+	if strings.Contains(string(definition.Raw), "[LAB]") {
+		return []domain.Finding{{Field: "description", Signal: "format"}}
+	}
+	return nil
+}
+
+// #region app-catalog-scanner-test
+// A definição com sinais não é fixada: some da lista, a chamada é
+// negada como fora do catálogo, e o observador recebe o motivo.
+func TestPinCatalog_varreAntesDoPin(t *testing.T) {
+	ctx := context.Background()
+	var rejected []Rejection
+	observe := func(r Rejection) { rejected = append(rejected, r) }
+	catalog := NewPinCatalog(newMemoryStore(), "files",
+		WithScanner(flagged{}), WithRejections(observe))
+	kept, err := catalog.Review(ctx, []domain.ToolDefinition{
+		tool("read_file", "Lê. [LAB]"), tool("list_dir", "Lista."),
+	})
+	t.Logf("chega ao agente %v; recusas %+v", names(kept), rejected)
+	if err != nil || len(kept) != 1 || len(rejected) != 1 ||
+		rejected[0].Reason != ReasonSuspicious {
+		t.Fatalf("%v, %+v, %v", names(kept), rejected, err)
+	}
+	if err := catalog.Check(ctx, "read_file"); !errors.Is(err,
+		ErrNotInCatalog) {
+		t.Fatalf("Check(read_file) = %v", err)
 	}
 }
 
