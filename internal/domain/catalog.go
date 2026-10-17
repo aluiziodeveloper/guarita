@@ -29,3 +29,25 @@ type Finding struct {
 }
 
 // #endregion
+
+// #region domain-skeleton
+// Skeleton é a silhueta de um nome de ferramenta: minúsculas ASCII, com
+// hífen e ponto trocados por sublinhado. read_file, Read-File e
+// read.file têm a mesma silhueta, e um modelo os confunde.
+//
+// Só o ASCII muda, como na função lower do SQLite: a migração 0003
+// calcula a mesma silhueta em SQL para os pins que já existiam.
+func Skeleton(name string) string {
+	out := []byte(name)
+	for i, b := range out {
+		switch {
+		case 'A' <= b && b <= 'Z':
+			out[i] = b + ('a' - 'A')
+		case b == '-' || b == '.':
+			out[i] = '_'
+		}
+	}
+	return string(out)
+}
+
+// #endregion

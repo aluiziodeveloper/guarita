@@ -146,10 +146,11 @@ func (s *Store) Pin(ctx context.Context, server, tool string) (
 // ferramenta antes, vale a primeira, e a revisão seguinte a compara.
 func (s *Store) SavePin(ctx context.Context, pin domain.Pin) error {
 	_, err := s.db.ExecContext(ctx, `INSERT INTO pins
-		(server, tool, fingerprint, definition, pinned_at)
-		VALUES (?, ?, ?, ?, ?)
+		(server, tool, skeleton, fingerprint, definition, pinned_at)
+		VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT (server, tool) DO NOTHING`,
-		pin.Server, pin.Tool, pin.Fingerprint, string(pin.Definition),
+		pin.Server, pin.Tool, domain.Skeleton(pin.Tool),
+		pin.Fingerprint, string(pin.Definition),
 		s.now().UTC().Format(time.RFC3339))
 	return err
 }
@@ -169,6 +170,26 @@ func (s *Store) MarkChanged(
 		seen, string(definition), s.now().UTC().Format(time.RFC3339),
 		server, tool)
 	return err
+}
+
+// #endregion
+
+// #region sqlitestore-owner
+// Owner devolve outro servidor que já fixou uma ferramenta com a mesma
+// silhueta de tool. O índice pins_skeleton faz a busca não ler a tabela
+// inteira.
+func (s *Store) Owner(ctx context.Context, server, tool string) (
+	string, bool, error,
+) {
+	var owner string
+	err := s.db.QueryRowContext(ctx, `SELECT server FROM pins
+		WHERE skeleton = ? AND server <> ?
+		ORDER BY pinned_at, server LIMIT 1`,
+		domain.Skeleton(tool), server).Scan(&owner)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	return owner, err == nil, err
 }
 
 // #endregion
