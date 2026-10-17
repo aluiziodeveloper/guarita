@@ -45,7 +45,7 @@ A raiz é um nó **E**: basta cortar um dos quatro ramos para o ataque falhar. P
 | `rug-pull` | Usar uma ferramenta aprovada com outro comportamento | trocar descrição OU esquema OU implementação | hash da definição (Cap. 9); sandbox para a implementação (Cap. 17) |
 | `tool-shadowing` | Fazer o agente chamar a ferramenta errada | nome repetido E escolha pela descrição | namespace por servidor e silhueta única no catálogo (Cap. 10) |
 | `indirect-prompt-injection` | Ordenar o agente pela resposta de uma ferramenta | texto hostil na resposta E o modelo obedecer | inspeção e marcação da resposta (Cap. 14) |
-| `excessive-agency` | Executar ação destrutiva permitida por engano | ferramenta perigosa exposta E nenhuma política restringe | menor privilégio (Cap. 11) |
+| `excessive-agency` | Executar ação destrutiva permitida por engano | ferramenta perigosa exposta E nenhuma política restringe | menor privilégio por agente e servidor, em Rego (Cap. 11) |
 | `data-exfiltration` | Levar dados sensíveis num argumento | dado sensível no contexto E argumento sem inspeção | DLP nos argumentos (Cap. 13) |
 | `sandbox-escape` | Ler ou alterar o host a partir do servidor | rede aberta OU arquivos montados OU symlink | contêiner restrito (Cap. 17) |
 | `credential-theft` | Usar a credencial da Guarita em nome do agente | *token* do usuário repassado OU credencial compartilhada | credencial por servidor, sem repasse (Cap. 8) |
