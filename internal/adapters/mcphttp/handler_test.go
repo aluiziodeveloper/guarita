@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -111,24 +112,28 @@ func TestHandler_negaAntesDeRepassar(t *testing.T) {
 // #endregion
 
 // #region mcphttp-stream-test
-// O primeiro evento precisa chegar enquanto o servidor ainda escreve.
+// O primeiro evento precisa chegar enquanto o servidor ainda escreve. O
+// prazo conta desde antes do pedido: http.Get só volta com os
+// cabeçalhos, e um proxy que acumula atrasa os cabeçalhos também.
 func TestHandler_repassaOFluxoSemAcumular(t *testing.T) {
 	fake := &upstream{release: make(chan struct{})}
+	release := sync.OnceFunc(func() { close(fake.release) })
+	t.Cleanup(release)
 	_, endpoint := newGuarita(t, fake)
-	response, err := http.Get(endpoint)
-	if err != nil {
-		t.Fatalf("GET: %v", err)
-	}
-	defer func() { _ = response.Body.Close() }()
 
 	first := make(chan string, 1)
 	go func() {
+		response, err := http.Get(endpoint)
+		if err != nil {
+			first <- err.Error()
+			return
+		}
+		defer func() { _ = response.Body.Close() }()
 		line, _ := bufio.NewReader(response.Body).ReadString('\n')
 		first <- line
 	}()
 	select {
 	case got := <-first:
-		close(fake.release)
 		if got != "data: primeiro\n" {
 			t.Fatalf("primeiro evento = %q", got)
 		}

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -66,6 +67,8 @@ type Handler struct {
 	callTimeout time.Duration
 	bodyTimeout time.Duration
 	credential  secret.Secret
+	logger      *slog.Logger
+	agent       func(context.Context) string
 }
 
 // #region mcphttp-options
@@ -82,6 +85,16 @@ func WithCallTimeout(d time.Duration) Option {
 // própria credencial, no lugar de qualquer uma que o agente mande.
 func WithUpstreamCredential(credential secret.Secret) Option {
 	return func(h *Handler) { h.credential = credential }
+}
+
+// WithLogger registra cada pedido, e os erros do proxy, em logger.
+func WithLogger(logger *slog.Logger) Option {
+	return func(h *Handler) { h.logger = logger }
+}
+
+// WithAgent diz ao registro como saber quem é o agente do pedido.
+func WithAgent(agent func(context.Context) string) Option {
+	return func(h *Handler) { h.agent = agent }
 }
 
 // WithBodyTimeout limita o tempo para o cliente enviar o corpo.
@@ -105,12 +118,16 @@ func NewHandler(
 		gate: gate, upstream: upstream,
 		callTimeout: DefaultCallTimeout,
 		bodyTimeout: DefaultBodyTimeout,
+		logger:      slog.New(slog.DiscardHandler),
+		agent:       func(context.Context) string { return "" },
 	}
 	for _, option := range options {
 		option(handler)
 	}
 	handler.proxy = &httputil.ReverseProxy{
 		Rewrite: handler.rewrite, ErrorHandler: proxyError,
+		ErrorLog: slog.NewLogLogger(handler.logger.Handler(),
+			slog.LevelWarn),
 	}
 	return handler, nil
 }
@@ -136,7 +153,9 @@ func (h *Handler) rewrite(r *httputil.ProxyRequest) {
 // #region mcphttp-serve
 // ServeHTTP atende os três métodos do endpoint MCP. Só o POST leva
 // mensagens do agente; GET e DELETE abrem e encerram o fluxo da sessão.
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
+	w := &accessWriter{ResponseWriter: rw, status: http.StatusOK}
+	defer h.logAccess(r, w, time.Now())
 	switch r.Method {
 	case http.MethodPost:
 		h.post(w, r)
@@ -165,6 +184,7 @@ func (h *Handler) post(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	message, _ := mcpproxy.ParseMessage(body) // a porta já o aceitou
+	noteMessage(w, message)
 	if err := checkMirrored(r.Header, message); err != nil {
 		writeErrorID(w, http.StatusBadRequest, message.ID,
 			codeHeaderMismatch, err.Error())
