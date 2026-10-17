@@ -1,6 +1,6 @@
 # Modelo de ameaças da Guarita — v1
 
-- **Versão:** v1, Capítulo 3 do livro (*tag* `cap03`); ameaça `dns-rebinding` acrescentada no Capítulo 7 (*tag* `cap07`), quando a Guarita passou a escutar na rede; `credential-theft` parcialmente mitigada no Capítulo 8 (*tag* `cap08`).
+- **Versão:** v1, Capítulo 3 do livro (*tag* `cap03`); ameaça `dns-rebinding` acrescentada no Capítulo 7 (*tag* `cap07`), quando a Guarita passou a escutar na rede; `credential-theft` parcialmente mitigada no Capítulo 8 (*tag* `cap08`); `rug-pull` parcialmente mitigada no Capítulo 9 (*tag* `cap09`).
 - **Método:** zonas e fronteiras de confiança, STRIDE por ameaça e árvores de ataque em [`trees.md`](trees.md).
 - **Fonte de verdade:** a tabela de ameaças deste arquivo e a função `threatmodel.Model()` precisam coincidir; o teste `TestModelo_coincideComODocumento` quebra a CI quando divergem.
 
@@ -54,7 +54,7 @@ Estado `open` significa que a Guarita ainda não tem a defesa. A conferência op
 | ID | Ameaça | STRIDE | Fronteira | Capítulo | Estado |
 |---|---|---|---|---|---|
 | `tool-poisoning` | Envenenamento de ferramenta | tampering, elevation-of-privilege | mcp-server->guarita | 10 | open |
-| `rug-pull` | Troca silenciosa da definição aprovada | tampering | mcp-server->guarita | 9 | open |
+| `rug-pull` | Troca silenciosa da definição aprovada | tampering | mcp-server->guarita | 9 | partially-mitigated |
 | `tool-shadowing` | Sombreamento de ferramenta por nome repetido | spoofing | mcp-server->guarita | 10 | open |
 | `indirect-prompt-injection` | Injeção de *prompt* indireta na resposta | tampering, elevation-of-privilege | mcp-server->guarita | 14 | open |
 | `excessive-agency` | Agência excessiva | elevation-of-privilege | agent->guarita | 11 | open |
@@ -74,6 +74,7 @@ Estado `open` significa que a Guarita ainda não tem a defesa. A conferência op
 | `insecure-parsing` | Capítulo 6 | Parser estrito das mensagens do agente: um valor por mensagem, sem chave repetida, sem lote, UTF-8, aninhamento e tamanho limitados. No stdio desde o Capítulo 6; nos POST do transporte HTTP desde o Capítulo 7, com corpo limitado a 4 MiB e prazo de leitura | `internal/adapters/mcpproxy`: contrabando, chave duplicada, mensagem grande, golden e fuzzing; `internal/adapters/mcphttp`: contrato com contrabando, corpo grande e corpo lento | Respostas do servidor (desafio do Capítulo 6) |
 | `dns-rebinding` | Capítulo 7 | `Host` de todo pedido contra a lista derivada do endereço de escuta; `Origin`, quando vem, contra uma lista exata; escuta em loopback por padrão; 403 com erro JSON-RPC | `internal/adapters/mcphttp`: guarda, contrato e integração; `deploy/rebinding-lab.sh` com `curl --resolve` | Fora do loopback, a proteção depende da lista em `-host`; desde o Capítulo 8, a Guarita também exige o *token* do agente nesse caso |
 | `credential-theft` | Capítulo 8 | No transporte HTTP: *token* do agente verificado (Ed25519, emissor, audiência igual ao recurso da Guarita, validade); repasse só dos cabeçalhos permitidos; credencial própria da Guarita para o servidor; segredos com tipo que se redige nos registros | `internal/adapters/identity` (audiência, algoritmo, `alg none`); `internal/adapters/mcphttp`: cabeçalhos permitidos, credencial, *confused deputy*, registro sem segredos | Uma credencial por servidor quando houver vários (Capítulo 10); escopos por ferramenta e agente na política (Capítulo 11); o transporte stdio não tem identidade de agente |
+| `rug-pull` | Capítulo 9 | No transporte HTTP: impressão digital SHA-256 da definição canônica inteira; confiança no primeiro uso; a definição divergente sai de `tools/list`, fica registrada no catálogo em SQLite e a ferramenta é negada em `tools/call`, inclusive se o servidor voltar ao original | `internal/domain` (forma canônica); `internal/app` (catálogo antes da política); `internal/adapters/mcphttp` (JSON e SSE); `attacks/rugpull` | A primeira definição é aceita sem revisão humana; a troca da implementação sem mudar a definição só a *sandbox* contém (Capítulo 17); o transporte stdio ainda não lê `tools/list`; aprovar uma atualização é o desafio do Capítulo 9 |
 
 ## A cena do Capítulo 3: o *confused deputy*
 
