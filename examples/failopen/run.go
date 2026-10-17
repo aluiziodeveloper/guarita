@@ -18,7 +18,7 @@ func Run(
 	upstream app.Upstream,
 	call domain.Call,
 ) (domain.Result, error) {
-	decision, _ := policy.Evaluate(ctx, call)
+	decision, _ := policy.Evaluate(ctx, domain.PolicyInput{Call: call})
 	if decision == domain.DecisionDeny {
 		return domain.Result{}, app.ErrPolicyDenied
 	}

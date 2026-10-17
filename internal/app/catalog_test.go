@@ -138,7 +138,7 @@ func reviewed(t *testing.T, definitions ...domain.ToolDefinition) *PinCatalog {
 type allowAll struct{}
 
 func (allowAll) Evaluate(
-	context.Context, domain.Call,
+	context.Context, domain.PolicyInput,
 ) (domain.Decision, error) {
 	return domain.DecisionAllow, nil
 }

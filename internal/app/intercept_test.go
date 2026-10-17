@@ -18,7 +18,7 @@ type stubPolicy struct {
 }
 
 func (p *stubPolicy) Evaluate(
-	context.Context, domain.Call,
+	context.Context, domain.PolicyInput,
 ) (domain.Decision, error) {
 	p.calls++
 	return p.decision, p.err
@@ -127,7 +127,7 @@ type ctxKey struct{}
 type contextPolicy struct{ seen any }
 
 func (p *contextPolicy) Evaluate(
-	ctx context.Context, _ domain.Call,
+	ctx context.Context, _ domain.PolicyInput,
 ) (domain.Decision, error) {
 	p.seen = ctx.Value(ctxKey{})
 	return domain.DecisionDeny, nil
@@ -164,3 +164,39 @@ func TestInterceptCall_autorizaSemRepassar(t *testing.T) {
 			len(upstream.forwarded))
 	}
 }
+
+// inputPolicy guarda a entrada que recebeu.
+type inputPolicy struct{ input domain.PolicyInput }
+
+func (p *inputPolicy) Evaluate(
+	_ context.Context, input domain.PolicyInput,
+) (domain.Decision, error) {
+	p.input = input
+	return domain.DecisionDeny, nil
+}
+
+// #region app-intercept-input-test
+// A política recebe o agente tirado do contexto, o servidor da rota e a
+// chamada, e nada mais.
+func TestAuthorize_montaAEntradaDaPolitica(t *testing.T) {
+	policy := &inputPolicy{}
+	agent := func(ctx context.Context) string {
+		name, _ := ctx.Value(ctxKey{}).(string)
+		return name
+	}
+	uc := NewInterceptCall(policy, &spyUpstream{},
+		WithServer("files"), WithAgent(agent))
+	ctx := context.WithValue(context.Background(), ctxKey{},
+		"relatorios")
+	_ = uc.Authorize(ctx, validCall)
+	want := domain.PolicyInput{
+		Agent: "relatorios", Server: "files", Call: validCall,
+	}
+	if policy.input.Agent != want.Agent ||
+		policy.input.Server != want.Server ||
+		policy.input.Call.ToolName != want.Call.ToolName {
+		t.Fatalf("entrada = %+v; want %+v", policy.input, want)
+	}
+}
+
+// #endregion

@@ -23,7 +23,7 @@ func TestPolicy_negaFerramentaAusente(t *testing.T) {
 		"":            domain.DecisionDeny,
 	} {
 		got, err := policy.Evaluate(context.Background(),
-			domain.Call{ToolName: tool})
+			domain.PolicyInput{Call: domain.Call{ToolName: tool}})
 		if err != nil || got != want {
 			t.Errorf("Evaluate(%q) = %s, %v; want %s", tool, got, err, want)
 		}
@@ -46,7 +46,7 @@ func TestNew_copiaATabela(t *testing.T) {
 	decisions["delete_file"] = domain.DecisionAllow
 
 	got, _ := policy.Evaluate(context.Background(),
-		domain.Call{ToolName: "delete_file"})
+		domain.PolicyInput{Call: domain.Call{ToolName: "delete_file"}})
 	if got != domain.DecisionDeny {
 		t.Fatalf("Evaluate(delete_file) = %s; a tabela vazou", got)
 	}

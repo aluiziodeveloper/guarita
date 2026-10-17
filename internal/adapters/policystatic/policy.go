@@ -32,9 +32,9 @@ func New(decisions map[string]domain.Decision) (*Policy, error) {
 
 // Evaluate devolve a decisão da tabela ou DecisionDeny.
 func (p *Policy) Evaluate(
-	_ context.Context, call domain.Call,
+	_ context.Context, input domain.PolicyInput,
 ) (domain.Decision, error) {
-	if decision, ok := p.decisions[call.ToolName]; ok {
+	if decision, ok := p.decisions[input.Call.ToolName]; ok {
 		return decision, nil
 	}
 	return domain.DecisionDeny, nil

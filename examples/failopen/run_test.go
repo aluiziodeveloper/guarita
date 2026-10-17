@@ -14,7 +14,7 @@ type fixedPolicy struct {
 }
 
 func (p fixedPolicy) Evaluate(
-	context.Context, domain.Call,
+	context.Context, domain.PolicyInput,
 ) (domain.Decision, error) {
 	return p.decision, p.err
 }
