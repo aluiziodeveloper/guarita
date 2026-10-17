@@ -9,6 +9,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/aluiziodeveloper/guarita/internal/platform/secret"
 )
 
 // recorder guarda os cabeçalhos que chegaram ao servidor.
@@ -55,6 +57,35 @@ func TestHandler_repassaSoOsCabecalhosPermitidos(t *testing.T) {
 	}
 	if got.Get("Mcp-Param-Region") != "sa-east-1" {
 		t.Errorf("Mcp-Param-Region não chegou")
+	}
+}
+
+// #endregion
+
+// #region mcphttp-credential-test
+// O servidor recebe a credencial da Guarita, nunca a do agente.
+func TestHandler_usaACredencialDaGuarita(t *testing.T) {
+	seen := make(chan http.Header, 1)
+	upstream := httptest.NewServer(recorder(seen))
+	t.Cleanup(upstream.Close)
+	target, _ := url.Parse(upstream.URL + "/mcp")
+	handler, _ := NewHandler(target, allowOnly(t, "read_file"),
+		WithUpstreamCredential(secret.New("cred-da-guarita")))
+	guarita := httptest.NewServer(handler)
+	t.Cleanup(guarita.Close)
+
+	r, _ := http.NewRequest("POST", guarita.URL,
+		strings.NewReader(toolCall(1, "read_file")))
+	r.Header.Set("Authorization", "Bearer tok-do-usuario")
+	response, err := http.DefaultClient.Do(r)
+	if err != nil {
+		t.Fatalf("POST: %v", err)
+	}
+	_ = response.Body.Close()
+	got := (<-seen).Get("Authorization")
+	t.Logf("Authorization no servidor: %q", got)
+	if got != "Bearer cred-da-guarita" {
+		t.Fatalf("Authorization = %q", got)
 	}
 }
 

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/aluiziodeveloper/guarita/internal/adapters/mcpproxy"
+	"github.com/aluiziodeveloper/guarita/internal/platform/secret"
 )
 
 // maxBodyBytes limita o corpo de um POST, como o limite de mensagem do
@@ -60,9 +61,11 @@ var _ Admitter = (*mcpproxy.Gate)(nil)
 // e repassa ao servidor pelo proxy reverso.
 type Handler struct {
 	gate        Admitter
+	upstream    *url.URL
 	proxy       *httputil.ReverseProxy
 	callTimeout time.Duration
 	bodyTimeout time.Duration
+	credential  secret.Secret
 }
 
 // #region mcphttp-options
@@ -75,6 +78,12 @@ func WithCallTimeout(d time.Duration) Option {
 	return func(h *Handler) { h.callTimeout = d }
 }
 
+// WithUpstreamCredential faz a Guarita se apresentar ao servidor com a
+// própria credencial, no lugar de qualquer uma que o agente mande.
+func WithUpstreamCredential(credential secret.Secret) Option {
+	return func(h *Handler) { h.credential = credential }
+}
+
 // WithBodyTimeout limita o tempo para o cliente enviar o corpo.
 func WithBodyTimeout(d time.Duration) Option {
 	return func(h *Handler) { h.bodyTimeout = d }
@@ -83,8 +92,8 @@ func WithBodyTimeout(d time.Duration) Option {
 // #endregion
 
 // #region mcphttp-new-handler
-// NewHandler monta o proxy reverso para upstream. Rewrite troca o
-// destino e mantém o caminho do servidor, qualquer que seja o recebido.
+// NewHandler monta o proxy reverso para upstream. As opções são
+// aplicadas antes, porque rewrite lê o que elas configuram.
 func NewHandler(
 	upstream *url.URL, gate Admitter, options ...Option,
 ) (*Handler, error) {
@@ -92,24 +101,34 @@ func NewHandler(
 		(upstream.Scheme != "http" && upstream.Scheme != "https") {
 		return nil, ErrUpstream
 	}
-	proxy := &httputil.ReverseProxy{
-		Rewrite: func(r *httputil.ProxyRequest) {
-			r.SetURL(upstream)
-			r.Out.URL.Path = upstream.Path
-			r.Out.URL.RawPath = upstream.RawPath
-			r.Out.Header = allowedHeaders(r.Out.Header)
-		},
-		ErrorHandler: proxyError,
-	}
 	handler := &Handler{
-		gate: gate, proxy: proxy,
+		gate: gate, upstream: upstream,
 		callTimeout: DefaultCallTimeout,
 		bodyTimeout: DefaultBodyTimeout,
 	}
 	for _, option := range options {
 		option(handler)
 	}
+	handler.proxy = &httputil.ReverseProxy{
+		Rewrite: handler.rewrite, ErrorHandler: proxyError,
+	}
 	return handler, nil
+}
+
+// #endregion
+
+// #region mcphttp-rewrite
+// rewrite monta o pedido ao servidor: o destino e o caminho dele, só os
+// cabeçalhos permitidos e, se houver, a credencial da própria Guarita.
+func (h *Handler) rewrite(r *httputil.ProxyRequest) {
+	r.SetURL(h.upstream)
+	r.Out.URL.Path = h.upstream.Path
+	r.Out.URL.RawPath = h.upstream.RawPath
+	r.Out.Header = allowedHeaders(r.Out.Header)
+	if !h.credential.IsZero() {
+		r.Out.Header.Set("Authorization",
+			"Bearer "+h.credential.Reveal())
+	}
 }
 
 // #endregion
