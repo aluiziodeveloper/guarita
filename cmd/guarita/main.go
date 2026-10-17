@@ -56,11 +56,11 @@ func run(
 	if err != nil {
 		return err
 	}
+	if config.upstream != "" {
+		return serveHTTP(ctx, config, policy, stderr)
+	}
 	// Os dois transportes só usam Authorize: o repasse fica com eles.
 	gate := mcpproxy.NewGate(app.NewInterceptCall(policy, nil))
-	if config.upstream != "" {
-		return serveHTTP(ctx, config, gate, stderr)
-	}
 	return serveStdio(ctx, config.command, gate, stdin, stdout, stderr)
 }
 
@@ -75,6 +75,7 @@ type config struct {
 	origins     []string
 	callTimeout time.Duration
 	auth        authConfig
+	catalogFile string // modo HTTP: o catálogo em SQLite
 }
 
 // authConfig é a identidade do modo HTTP: quem emite os tokens do
@@ -102,7 +103,8 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	if err := flags.Parse(flagArgs); err != nil {
 		return config{}, errors.Join(errUsage, err)
 	}
-	if flags.NArg() > 0 || (c.upstream == "") == (len(command) == 0) {
+	if flags.NArg() > 0 || (c.upstream == "") == (len(command) == 0) ||
+		(c.catalogFile != "" && c.upstream == "") {
 		return config{}, errUsage
 	}
 	c.decisions = allowAll(list(*allow))
@@ -132,6 +134,8 @@ func httpFlags(
 		"recurso protegido (padrão: http://<escuta>/mcp)")
 	flags.StringVar(&c.auth.credentialFile, "upstream-credential", "",
 		"arquivo com a credencial da Guarita para o servidor")
+	flags.StringVar(&c.catalogFile, "catalog", "",
+		"arquivo SQLite do catálogo de ferramentas")
 	return hosts, origins
 }
 

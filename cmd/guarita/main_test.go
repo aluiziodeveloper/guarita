@@ -56,6 +56,7 @@ func TestRun_recusaUsoInvalido(t *testing.T) {
 		{"--"},
 		{"-nope", "--", "cat"},
 		{"-upstream", "http://127.0.0.1:9000/mcp", "--", "cat"},
+		{"-catalog", "catalog.db", "--", "cat"},
 	} {
 		err := run(context.Background(), args,
 			io.NopCloser(strings.NewReader("")),
