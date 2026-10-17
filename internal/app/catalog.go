@@ -27,6 +27,9 @@ type CatalogStore interface {
 	SavePin(ctx context.Context, pin domain.Pin) error
 	MarkChanged(ctx context.Context, server, tool string,
 		seen domain.Fingerprint, definition []byte) error
+	// Owner devolve outro servidor que fixou a mesma silhueta.
+	Owner(ctx context.Context, server, tool string) (
+		owner string, found bool, err error)
 }
 
 // #endregion
@@ -60,6 +63,7 @@ const (
 	ReasonSuspicious = "suspicious" // o varredor achou sinais
 	ReasonChanged    = "changed"    // divergiu da fixada agora
 	ReasonMarked     = "marked"     // já estava marcada como alterada
+	ReasonShadows    = "shadows"    // outro servidor já usa o nome
 )
 
 // #endregion
@@ -132,11 +136,8 @@ func (uc *PinCatalog) review(
 	switch {
 	case err != nil:
 		return Rejection{}, err
-	case !found: // confiança no primeiro uso, após a varredura
-		return Rejection{}, uc.store.SavePin(ctx, domain.Pin{
-			Server: uc.server, Tool: definition.Name,
-			Fingerprint: fingerprint, Definition: definition.Raw,
-		})
+	case !found:
+		return uc.pinNew(ctx, definition, fingerprint)
 	case pin.Changed:
 		return Rejection{Reason: ReasonMarked}, nil
 	case pin.Fingerprint != fingerprint:
@@ -145,6 +146,31 @@ func (uc *PinCatalog) review(
 		return Rejection{Reason: ReasonChanged}, err
 	}
 	return Rejection{}, nil
+}
+
+// #endregion
+
+// #region app-catalog-pin-new
+// pinNew fixa uma ferramenta nova, depois da varredura, se nenhum outro
+// servidor já fixou uma com a mesma silhueta: o primeiro fica com o
+// nome, e o segundo é sombreamento.
+func (uc *PinCatalog) pinNew(
+	ctx context.Context, definition domain.ToolDefinition,
+	fingerprint domain.Fingerprint,
+) (Rejection, error) {
+	owner, taken, err := uc.store.Owner(ctx, uc.server, definition.Name)
+	if err != nil || taken {
+		shadow := domain.Finding{
+			Field: "name", Signal: ReasonShadows, Detail: owner,
+		}
+		return Rejection{
+			Reason: ReasonShadows, Findings: []domain.Finding{shadow},
+		}, err
+	}
+	return Rejection{}, uc.store.SavePin(ctx, domain.Pin{
+		Server: uc.server, Tool: definition.Name,
+		Fingerprint: fingerprint, Definition: definition.Raw,
+	})
 }
 
 // #endregion
