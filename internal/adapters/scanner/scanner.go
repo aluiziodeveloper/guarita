@@ -25,7 +25,12 @@ const (
 	SignalControl       = "control"       // caractere de controle (Cc)
 	SignalCompatibility = "compatibility" // texto que muda sob NFKC
 	SignalMalformed     = "malformed"     // definição que não é JSON válido
+	SignalInvisible     = "invisible"     // marca combinante sem uso em texto
 )
+
+// graphemeJoiner é o combining grapheme joiner: uma marca combinante
+// (Mn) que não desenha nada nem compõe um acento.
+const graphemeJoiner = '\u034F'
 
 // validName é o conjunto de nomes que a especificação recomenda: letras
 // e dígitos ASCII, sublinhado, hífen e ponto, de 1 a 128 caracteres.
@@ -102,6 +107,11 @@ func characters(field, text string) []domain.Finding {
 		case unicode.Is(unicode.Cc, r) &&
 			!strings.ContainsRune(allowed, r):
 			signal = SignalControl
+		case unicode.Is(unicode.Variation_Selector, r) ||
+			r == graphemeJoiner:
+			// Mn, como os acentos; a propriedade Variation_Selector
+			// separa os seletores sem recusar a categoria inteira.
+			signal = SignalInvisible
 		}
 		if signal != "" && !seen[signal] {
 			seen[signal] = true
