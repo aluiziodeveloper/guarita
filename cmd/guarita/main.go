@@ -74,6 +74,16 @@ type config struct {
 	hosts       []string
 	origins     []string
 	callTimeout time.Duration
+	auth        authConfig
+}
+
+// authConfig é a identidade do modo HTTP: quem emite os tokens do
+// agente, para que recurso, e a credencial da Guarita para o servidor.
+type authConfig struct {
+	keyFile        string
+	issuer         string
+	resource       string
+	credentialFile string
 }
 
 // #region cmd-guarita-parse-config
@@ -88,12 +98,7 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	flags.SetOutput(stderr)
 	allow := flags.String("allow", "", "ferramentas permitidas")
 	c := config{command: command}
-	flags.StringVar(&c.upstream, "upstream", "", "URL do servidor HTTP")
-	flags.StringVar(&c.listen, "listen", "127.0.0.1:8080", "escuta")
-	hosts := flags.String("host", "", "Host aceitos (padrão: loopback)")
-	origins := flags.String("origin", "", "origens aceitas")
-	flags.DurationVar(&c.callTimeout, "call-timeout",
-		mcphttp.DefaultCallTimeout, "prazo de cada chamada")
+	hosts, origins := httpFlags(flags, &c)
 	if err := flags.Parse(flagArgs); err != nil {
 		return config{}, errors.Join(errUsage, err)
 	}
@@ -103,6 +108,31 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	c.decisions = allowAll(list(*allow))
 	c.hosts, c.origins = list(*hosts), list(*origins)
 	return c, nil
+}
+
+// #endregion
+
+// #region cmd-guarita-http-flags
+// httpFlags declara as opções do modo HTTP. As listas voltam como texto
+// e são separadas depois de Parse.
+func httpFlags(
+	flags *flag.FlagSet, c *config,
+) (hosts, origins *string) {
+	flags.StringVar(&c.upstream, "upstream", "", "URL do servidor HTTP")
+	flags.StringVar(&c.listen, "listen", "127.0.0.1:8080", "escuta")
+	hosts = flags.String("host", "", "Host aceitos (padrão: loopback)")
+	origins = flags.String("origin", "", "origens aceitas")
+	flags.DurationVar(&c.callTimeout, "call-timeout",
+		mcphttp.DefaultCallTimeout, "prazo de cada chamada")
+	flags.StringVar(&c.auth.keyFile, "agent-key", "",
+		"chave pública Ed25519 (PEM) do emissor dos tokens do agente")
+	flags.StringVar(&c.auth.issuer, "agent-issuer", "",
+		"emissor dos tokens do agente")
+	flags.StringVar(&c.auth.resource, "resource", "",
+		"recurso protegido (padrão: http://<escuta>/mcp)")
+	flags.StringVar(&c.auth.credentialFile, "upstream-credential", "",
+		"arquivo com a credencial da Guarita para o servidor")
+	return hosts, origins
 }
 
 // #endregion

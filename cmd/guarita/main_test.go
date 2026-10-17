@@ -153,7 +153,7 @@ func TestRun_servePorHTTP(t *testing.T) {
 // #endregion
 
 // startHTTP roda a Guarita e devolve o endpoint que ela anuncia na
-// primeira linha da saída de erro.
+// saída de erro, que também recebe o registro estruturado.
 func startHTTP(
 	t *testing.T, ctx context.Context, args ...string,
 ) (string, <-chan error) {
@@ -165,13 +165,16 @@ func startHTTP(
 			nopWriteCloser{&bytes.Buffer{}}, stderrW)
 		_ = stderrW.Close()
 	}()
-	line, err := bufio.NewReader(stderrR).ReadString('\n')
-	if err != nil {
-		t.Fatalf("a Guarita não anunciou o endereço: %v", err)
+	const prefix = "guarita: escutando em "
+	lines := bufio.NewScanner(stderrR)
+	for lines.Scan() {
+		if address, ok := strings.CutPrefix(lines.Text(), prefix); ok {
+			go func() { _, _ = io.Copy(io.Discard, stderrR) }()
+			return address, done
+		}
 	}
-	go func() { _, _ = io.Copy(io.Discard, stderrR) }()
-	return strings.TrimSpace(strings.TrimPrefix(line,
-		"guarita: escutando em ")), done
+	t.Fatalf("a Guarita não anunciou o endereço: %v", lines.Err())
+	return "", nil
 }
 
 func toolCall(id int, tool string) string {
