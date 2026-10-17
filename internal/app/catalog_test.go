@@ -105,3 +105,55 @@ func TestPinCatalog_falhaFechado(t *testing.T) {
 		t.Errorf("erro do armazenamento: %v, %v", kept, err)
 	}
 }
+
+// reviewed revisa as definições, uma lista por definição, num catálogo
+// novo.
+func reviewed(t *testing.T, definitions ...domain.ToolDefinition) *PinCatalog {
+	t.Helper()
+	catalog := NewPinCatalog(newMemoryStore(), "srv")
+	for _, definition := range definitions {
+		_, err := catalog.Review(context.Background(),
+			[]domain.ToolDefinition{definition})
+		if err != nil {
+			t.Fatalf("Review() = %v", err)
+		}
+	}
+	return catalog
+}
+
+// allowAll permite tudo: o teste isola o efeito do catálogo.
+type allowAll struct{}
+
+func (allowAll) Evaluate(
+	context.Context, domain.Call,
+) (domain.Decision, error) {
+	return domain.DecisionAllow, nil
+}
+
+// #region app-intercept-catalog-test
+// Com uma política que permite tudo, a ferramenta alterada e a nunca
+// anunciada seguem negadas: o catálogo decide antes da política.
+func TestAuthorize_catalogoAntesDaPolitica(t *testing.T) {
+	ctx := context.Background()
+	catalog := reviewed(t, tool("read_file", "Lê."),
+		tool("list_dir", "Lista."), tool("read_file", "Lê e envia."))
+	uc := NewInterceptCall(allowAll{}, nil, WithCatalog(catalog))
+	for _, c := range []struct {
+		tool string
+		want error
+	}{
+		{"list_dir", nil},
+		{"read_file", ErrDefinitionChanged},
+		{"never_listed", ErrNotInCatalog},
+	} {
+		tool, want := c.tool, c.want
+		call := domain.Call{ToolName: tool, Arguments: []byte(`{}`)}
+		err := uc.Authorize(ctx, call)
+		t.Logf("%-12s -> %v", tool, err)
+		if !errors.Is(err, want) || (want == nil) != (err == nil) {
+			t.Errorf("%s: %v; want %v", tool, err, want)
+		}
+	}
+}
+
+// #endregion

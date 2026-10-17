@@ -37,18 +37,54 @@ var (
 	ErrPolicyFailed = errors.New("policy could not decide")
 )
 
+// #region app-tool-catalog
+// ToolCatalog diz se uma ferramenta pode ser chamada no estado atual do
+// catálogo. *PinCatalog o satisfaz.
+type ToolCatalog interface {
+	Check(ctx context.Context, tool string) error
+}
+
+// Option ajusta o caso de uso.
+type Option func(*InterceptCall)
+
+// WithCatalog faz Authorize negar a ferramenta fora do catálogo ou com
+// definição alterada, antes de consultar a política.
+func WithCatalog(catalog ToolCatalog) Option {
+	return func(uc *InterceptCall) { uc.catalog = catalog }
+}
+
+// #endregion
+
+var _ ToolCatalog = (*PinCatalog)(nil)
+
+// checkCatalog consulta o catálogo, se houver um.
+func (uc *InterceptCall) checkCatalog(
+	ctx context.Context, call domain.Call,
+) error {
+	if uc.catalog == nil {
+		return nil
+	}
+	return uc.catalog.Check(ctx, call.ToolName)
+}
+
 // #region app-intercept-type
 // InterceptCall é o caso de uso que fica entre o agente e o servidor.
 type InterceptCall struct {
 	policy   PolicyEvaluator
 	upstream Upstream
+	catalog  ToolCatalog
 }
 
-// NewInterceptCall recebe as portas de que o caso de uso precisa.
+// NewInterceptCall recebe as portas de que o caso de uso precisa. As
+// opcionais chegam por opções funcionais.
 func NewInterceptCall(
-	policy PolicyEvaluator, upstream Upstream,
+	policy PolicyEvaluator, upstream Upstream, options ...Option,
 ) *InterceptCall {
-	return &InterceptCall{policy: policy, upstream: upstream}
+	uc := &InterceptCall{policy: policy, upstream: upstream}
+	for _, option := range options {
+		option(uc)
+	}
+	return uc
 }
 
 // #endregion
@@ -73,6 +109,9 @@ func (uc *InterceptCall) Authorize(
 	ctx context.Context, call domain.Call,
 ) error {
 	if err := call.Validate(); err != nil {
+		return fmt.Errorf("intercept call: %w", err)
+	}
+	if err := uc.checkCatalog(ctx, call); err != nil {
 		return fmt.Errorf("intercept call: %w", err)
 	}
 	decision, err := uc.policy.Evaluate(ctx, call)
