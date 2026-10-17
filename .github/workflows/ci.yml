@@ -90,3 +90,31 @@ jobs:
       - name: Run laboratory attacks
         run: go test -race -count=1 -v ./attacks/...
   # #endregion
+
+  # #region ci-policy-tests
+  policies:
+    name: Policy tests
+    runs-on: ubuntu-latest
+    env:
+      OPA: github.com/open-policy-agent/opa@v1.21.1
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@v7.0.0
+        with:
+          go-version: "1.27.x"
+          check-latest: true
+          cache: true
+
+      # A mesma versão do OPA que a Guarita embute, pelo go run: o
+      # binário que testa é o que decide em produção.
+      - name: Check formatting and types
+        run: |
+          go run "$OPA" fmt --list --fail policies
+          go run "$OPA" check --strict policies
+
+      - name: Run opa test
+        run: go run "$OPA" test -v policies
+  # #endregion
