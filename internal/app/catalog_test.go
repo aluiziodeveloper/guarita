@@ -42,6 +42,14 @@ func (m *memoryStore) MarkChanged(
 	return m.fail
 }
 
+func (m *memoryStore) Approve(_ context.Context, server, tool string) error {
+	pin := m.pins[[2]string{server, tool}]
+	pin.Fingerprint, pin.Definition = pin.SeenFingerprint, pin.SeenDefinition
+	pin.Changed, pin.SeenFingerprint, pin.SeenDefinition = false, "", nil
+	m.pins[[2]string{server, tool}] = pin
+	return m.fail
+}
+
 func tool(name, description string) domain.ToolDefinition {
 	return domain.ToolDefinition{Name: name, Raw: []byte(`{"name":"` +
 		name + `","description":"` + description + `"}`)}

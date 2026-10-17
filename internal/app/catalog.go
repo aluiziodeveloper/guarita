@@ -16,6 +16,8 @@ var (
 	// ErrDefinitionChanged nega a chamada a uma ferramenta cuja
 	// definição mudou depois de fixada.
 	ErrDefinitionChanged = errors.New("tool definition changed since it was pinned")
+	// ErrNotChanged recusa aprovar uma ferramenta que não divergiu.
+	ErrNotChanged = errors.New("tool definition has not changed")
 )
 
 // #region app-catalog-store
@@ -27,6 +29,8 @@ type CatalogStore interface {
 	SavePin(ctx context.Context, pin domain.Pin) error
 	MarkChanged(ctx context.Context, server, tool string,
 		seen domain.Fingerprint, definition []byte) error
+	// Approve troca a fixada pela vista por último e tira a marca.
+	Approve(ctx context.Context, server, tool string) error
 }
 
 // #endregion
@@ -109,3 +113,18 @@ func (uc *PinCatalog) Check(ctx context.Context, tool string) error {
 }
 
 // #endregion
+
+// ApproveUpdate aceita a definição divergente de tool, depois da
+// revisão do operador: ela passa a ser a fixada.
+func (uc *PinCatalog) ApproveUpdate(ctx context.Context, tool string) error {
+	pin, found, err := uc.store.Pin(ctx, uc.server, tool)
+	switch {
+	case err != nil:
+		return fmt.Errorf("catalog %s: %w", uc.server, err)
+	case !found:
+		return ErrNotInCatalog
+	case !pin.Changed:
+		return ErrNotChanged
+	}
+	return uc.store.Approve(ctx, uc.server, tool)
+}

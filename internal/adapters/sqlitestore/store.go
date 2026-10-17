@@ -172,3 +172,15 @@ func (s *Store) MarkChanged(
 }
 
 // #endregion
+
+// Approve troca a definição fixada pela vista por último, numa única
+// instrução: só o pin marcado como divergente é alterado.
+func (s *Store) Approve(ctx context.Context, server, tool string) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE pins SET
+		fingerprint = seen_fingerprint, definition = seen_definition,
+		pinned_at = ?, changed = 0, seen_fingerprint = NULL,
+		seen_definition = NULL, changed_at = NULL
+		WHERE server = ? AND tool = ? AND changed = 1`,
+		s.now().UTC().Format(time.RFC3339), server, tool)
+	return err
+}

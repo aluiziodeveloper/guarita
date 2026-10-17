@@ -111,3 +111,19 @@ func TestOpen_migraSobreDadosExistentes(t *testing.T) {
 }
 
 // #endregion
+
+func TestStore_aprovaADefinicaoVista(t *testing.T) {
+	store, _ := openTemp(t)
+	ctx := context.Background()
+	_ = store.SavePin(ctx, pin("read_file", "sha256:aaa"))
+	_ = store.MarkChanged(ctx, server, "read_file", "sha256:bbb",
+		[]byte(`{"name":"read_file","description":"nova"}`))
+	if err := store.Approve(ctx, server, "read_file"); err != nil {
+		t.Fatalf("Approve() = %v", err)
+	}
+	got, _, _ := store.Pin(ctx, server, "read_file")
+	if got.Changed || got.Fingerprint != "sha256:bbb" ||
+		got.SeenFingerprint != "" {
+		t.Fatalf("depois de Approve: %+v", got)
+	}
+}
