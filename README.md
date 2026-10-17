@@ -149,6 +149,8 @@ No Capítulo 6, a referência é `cap06`; `desafio/cap06` traz os testes da insp
 
 No Capítulo 7, a referência é `cap07`; `desafio/cap07` traz os testes das origens equivalentes e `cap07-desafio`, a solução.
 
+No Capítulo 8, a referência é `cap08`; `desafio/cap08` traz os testes da rotação de chaves por `kid` e `cap08-desafio`, a solução.
+
 ## Proxy stdio
 
 A partir do Capítulo 5, a Guarita fica entre o agente e um servidor MCP que fala pelo transporte stdio. Configure o agente para executar a Guarita no lugar do servidor, com o comando do servidor depois de `--`:
@@ -186,6 +188,31 @@ O agente passa a usar `http://127.0.0.1:8080/mcp` como endereço do servidor. Ca
 | `-call-timeout` | `30s` | Prazo de cada chamada, inclusive a resposta em fluxo |
 
 Um pedido com `Host` ou `Origin` fora das listas recebe 403: é a defesa contra DNS rebinding. Um corpo acima de 4 MiB recebe 413; um corpo que não chega em 10 segundos, 408; um servidor que não responde no prazo, 504.
+
+Desde o Capítulo 8, a Guarita segue a revisão `2026-07-28` do MCP: confere `MCP-Protocol-Version`, `Mcp-Method` e `Mcp-Name` contra o corpo (400 com o código `-32020` quando divergem) e não aplica o prazo de chamada a `subscriptions/listen`. Clientes da revisão `2025-11-25` continuam atendidos.
+
+## Identidade e credenciais
+
+A partir do Capítulo 8, a Guarita autentica o agente com um JWT assinado em Ed25519 e se apresenta ao servidor com a própria credencial. O *token* do agente nunca chega ao servidor: só os cabeçalhos do MCP e do conteúdo são repassados.
+
+```bash
+go run ./cmd/lab-token -genkey -out lab/            # agent.key (0600) e agent.pub
+printf 'credencial-da-guarita\n' > lab/cred && chmod 600 lab/cred
+./guarita -allow read_file -upstream http://127.0.0.1:9000/mcp \
+  -agent-key lab/agent.pub -agent-issuer https://auth.lab.test \
+  -upstream-credential lab/cred
+go run ./cmd/lab-token -key lab/agent.key -iss https://auth.lab.test \
+  -aud http://127.0.0.1:8080/mcp -sub agente-1      # token do agente
+```
+
+| Opção | Efeito |
+|---|---|
+| `-agent-key` | Chave pública Ed25519 (PEM) do emissor dos tokens do agente |
+| `-agent-issuer` | Emissor esperado (`iss`) |
+| `-resource` | Recurso protegido, que precisa estar na audiência (`aud`) do token; padrão `http://<escuta>/mcp` |
+| `-upstream-credential` | Arquivo com a credencial da Guarita para o servidor; precisa ter permissão `0600` |
+
+Sem *token* válido, a resposta é 401 com `WWW-Authenticate` apontando os metadados do recurso em `/.well-known/oauth-protected-resource` (RFC 9728). Sem `-agent-key`, a Guarita só aceita escutar em loopback e avisa no registro; com `-host`, ela não sobe. O registro estruturado sai em JSON na saída de erro e nunca contém *tokens* nem credenciais. `cmd/lab-token` faz o papel do servidor de autorização só no laboratório.
 
 ## Arquitetura e regra de imports
 
