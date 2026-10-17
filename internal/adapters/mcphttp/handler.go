@@ -27,6 +27,10 @@ const (
 	DefaultBodyTimeout = 10 * time.Second
 )
 
+// methodSubscriptionsListen abre o fluxo de notificações da revisão
+// 2026-07-28, no lugar do GET das revisões anteriores.
+const methodSubscriptionsListen = "subscriptions/listen"
+
 // Códigos JSON-RPC das respostas que a própria Guarita produz.
 const (
 	codeInvalidRequest = -32600
@@ -131,14 +135,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // post lê o corpo, dentro dos limites, e só o repassa se a porta
 // deixar. O servidor recebe os mesmos bytes que a porta leu.
 func (h *Handler) post(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), h.callTimeout)
-	defer cancel()
 	body, status, err := h.readBody(w, r)
 	if err != nil {
 		writeError(w, status, codeInvalidRequest, err.Error())
 		return
 	}
-	if forward, reply := h.gate.Admit(ctx, body); !forward {
+	if forward, reply := h.gate.Admit(r.Context(), body); !forward {
 		writeJSON(w, replyStatus(reply), reply)
 		return
 	}
@@ -148,10 +150,26 @@ func (h *Handler) post(w http.ResponseWriter, r *http.Request) {
 			codeHeaderMismatch, err.Error())
 		return
 	}
+	ctx, cancel := h.callContext(r.Context(), message.Method)
+	defer cancel()
 	out := r.Clone(ctx) // o pedido recebido não é alterado
 	out.Body = io.NopCloser(bytes.NewReader(body))
 	out.ContentLength = int64(len(body))
 	h.proxy.ServeHTTP(w, out)
+}
+
+// #endregion
+
+// #region mcphttp-call-context
+// callContext dá prazo a cada chamada, menos a subscriptions/listen da
+// revisão 2026-07-28: esse fluxo fica aberto enquanto o agente quiser.
+func (h *Handler) callContext(
+	ctx context.Context, method string,
+) (context.Context, context.CancelFunc) {
+	if method == methodSubscriptionsListen {
+		return context.WithCancel(ctx)
+	}
+	return context.WithTimeout(ctx, h.callTimeout)
 }
 
 // #endregion
