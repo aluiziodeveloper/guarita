@@ -1,0 +1,104 @@
+package main
+
+import (
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"regexp"
+	"strings"
+
+	"github.com/aluiziodeveloper/guarita/internal/app"
+)
+
+// upstreamServer é um servidor MCP atrás da Guarita. O nome é o
+// namespace dado pelo operador; vazio, é o servidor de -upstream, em
+// /mcp, como até o Capítulo 9.
+type upstreamServer struct {
+	name string
+	url  string
+}
+
+// validServerName limita o namespace a um trecho de caminho seguro.
+var validServerName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,31}$`)
+
+var errServerName = errors.New(
+	"-server must be name=URL, name in [a-z0-9-], at most 32, unique")
+
+// #region cmd-guarita-server-flag
+// serverFlag lê -server nome=URL, que pode se repetir. O nome não vem
+// do servidor (serverInfo não é único): é o operador quem o escolhe.
+func serverFlag(servers *[]upstreamServer) func(string) error {
+	return func(value string) error {
+		name, target, ok := strings.Cut(value, "=")
+		if !ok || !validServerName.MatchString(name) || target == "" {
+			return errServerName
+		}
+		for _, existing := range *servers {
+			if existing.name == name {
+				return errServerName
+			}
+		}
+		*servers = append(*servers, upstreamServer{name, target})
+		return nil
+	}
+}
+
+// #endregion
+
+// withUpstream põe o servidor de -upstream, se houver, primeiro: ele
+// fica em /mcp, como até o Capítulo 9.
+func withUpstream(upstream string, servers []upstreamServer) []upstreamServer {
+	if upstream == "" {
+		return servers
+	}
+	return append([]upstreamServer{{url: upstream}}, servers...)
+}
+
+// path é onde o agente alcança o servidor na Guarita.
+func (s upstreamServer) path() string {
+	if s.name == "" {
+		return "/mcp"
+	}
+	return "/mcp/" + s.name
+}
+
+// catalogKey identifica o servidor no catálogo: o namespace, ou a URL
+// para o servidor de -upstream, como no Capítulo 9.
+func (s upstreamServer) catalogKey() string {
+	if s.name == "" {
+		return s.url
+	}
+	return s.name
+}
+
+// #region cmd-guarita-router
+// routes atende /mcp/{server}: PathValue devolve o trecho do caminho
+// que casou com o curinga, e um nome sem servidor recebe 404.
+type routes map[string]http.Handler
+
+func (rs routes) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	handler, ok := rs[r.PathValue("server")]
+	if !ok {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = fmt.Fprintln(w, `{"jsonrpc":"2.0","id":null,`+
+			`"error":{"code":-32600,"message":"unknown server"}}`)
+		return
+	}
+	handler.ServeHTTP(w, r)
+}
+
+// #endregion
+
+// logRejection registra cada definição que não chegou ao agente.
+func logRejection(logger *slog.Logger) func(app.Rejection) {
+	return func(r app.Rejection) {
+		signals := make([]string, 0, len(r.Findings))
+		for _, f := range r.Findings {
+			signals = append(signals, f.Field+":"+f.Signal+":"+f.Detail)
+		}
+		logger.Warn("definição recusada", "server", r.Server,
+			"tool", r.Tool, "reason", r.Reason, "signals", signals)
+	}
+}

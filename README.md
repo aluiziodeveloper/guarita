@@ -153,6 +153,8 @@ No Capítulo 8, a referência é `cap08`; `desafio/cap08` traz os testes da rota
 
 No Capítulo 9, a referência é `cap09`; `desafio/cap09` traz os testes da aprovação de uma atualização e `cap09-desafio`, a solução.
 
+No Capítulo 10, a referência é `cap10`; `desafio/cap10` traz os testes dos seletores de variação e `cap10-desafio`, a solução.
+
 ## Proxy stdio
 
 A partir do Capítulo 5, a Guarita fica entre o agente e um servidor MCP que fala pelo transporte stdio. Configure o agente para executar a Guarita no lugar do servidor, com o comando do servidor depois de `--`:
@@ -227,6 +229,19 @@ A partir do Capítulo 9, com `-catalog`, a Guarita guarda num arquivo SQLite a i
 Se o servidor mudar a definição de uma ferramenta já fixada (nome, descrição, esquema ou qualquer outro campo), ela sai do `tools/list` que chega ao agente e qualquer `tools/call` para ela recebe o erro `-32001` com `tool definition changed since it was pinned`. A ferramenta continua barrada mesmo se o servidor voltar à definição original. Uma ferramenta que nunca apareceu num `tools/list` também é negada. O catálogo existe só no modo HTTP; sem `-catalog`, a Guarita avisa no registro que não fixa definições.
 
 As migrações do banco ficam em `internal/adapters/sqlitestore/migrations` e são aplicadas ao abrir, em ordem, com a versão em `PRAGMA user_version`.
+
+## Vários servidores e varredura das definições
+
+A partir do Capítulo 10, a Guarita protege vários servidores ao mesmo tempo. Cada um recebe um namespace escolhido pelo operador e fica em `/mcp/{namespace}`; `-upstream` continua valendo em `/mcp`:
+
+```bash
+./guarita -allow read_file -catalog catalog.db \
+  -server files=http://127.0.0.1:9001/mcp -server mail=http://127.0.0.1:9002/mcp
+```
+
+O namespace tem de 1 a 32 caracteres em `[a-z0-9-]`. Cada servidor é um recurso protegido próprio: o *token* do agente precisa ter na audiência o endereço daquele caminho, e os metadados ficam em `/.well-known/oauth-protected-resource/mcp/{namespace}`.
+
+Com `-catalog`, toda definição passa antes por uma varredura estrutural: é recusada a que tem caracteres de formatação (largura zero, controles de direção, *tags* Unicode), caracteres de controle, texto que muda sob NFKC ou nome fora do conjunto da especificação (`[A-Za-z0-9_.-]`, até 128 caracteres). Uma ferramenta cujo nome, ignorando maiúsculas e trocando `-` e `.` por `_`, já foi fixado por outro servidor também é recusada. Cada recusa aparece no registro com o servidor, a ferramenta, o motivo e os sinais.
 
 ## Ataques de laboratório
 

@@ -56,7 +56,7 @@ func run(
 	if err != nil {
 		return err
 	}
-	if config.upstream != "" {
+	if len(config.servers) > 0 {
 		return serveHTTP(ctx, config, policy, stderr)
 	}
 	// Os dois transportes só usam Authorize: o repasse fica com eles.
@@ -68,8 +68,8 @@ func run(
 
 type config struct {
 	decisions   map[string]domain.Decision
-	command     []string // modo stdio
-	upstream    string   // modo HTTP
+	command     []string         // modo stdio
+	servers     []upstreamServer // modo HTTP: -upstream e -server
 	listen      string
 	hosts       []string
 	origins     []string
@@ -99,12 +99,16 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	flags.SetOutput(stderr)
 	allow := flags.String("allow", "", "ferramentas permitidas")
 	c := config{command: command}
-	hosts, origins := httpFlags(flags, &c)
+	upstream, hosts, origins := httpFlags(flags, &c)
 	if err := flags.Parse(flagArgs); err != nil {
 		return config{}, errors.Join(errUsage, err)
 	}
-	if flags.NArg() > 0 || (c.upstream == "") == (len(command) == 0) ||
-		(c.catalogFile != "" && c.upstream == "") {
+	if flags.NArg() > 0 {
+		return config{}, errUsage
+	}
+	c.servers = withUpstream(*upstream, c.servers)
+	if (len(c.servers) == 0) == (len(command) == 0) ||
+		(c.catalogFile != "" && len(c.servers) == 0) {
 		return config{}, errUsage
 	}
 	c.decisions = allowAll(list(*allow))
@@ -119,8 +123,10 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 // e são separadas depois de Parse.
 func httpFlags(
 	flags *flag.FlagSet, c *config,
-) (hosts, origins *string) {
-	flags.StringVar(&c.upstream, "upstream", "", "URL do servidor HTTP")
+) (upstream, hosts, origins *string) {
+	upstream = flags.String("upstream", "", "URL do servidor HTTP")
+	flags.Func("server", "servidor com namespace: nome=URL (repetível)",
+		serverFlag(&c.servers))
 	flags.StringVar(&c.listen, "listen", "127.0.0.1:8080", "escuta")
 	hosts = flags.String("host", "", "Host aceitos (padrão: loopback)")
 	origins = flags.String("origin", "", "origens aceitas")
@@ -136,7 +142,7 @@ func httpFlags(
 		"arquivo com a credencial da Guarita para o servidor")
 	flags.StringVar(&c.catalogFile, "catalog", "",
 		"arquivo SQLite do catálogo de ferramentas")
-	return hosts, origins
+	return upstream, hosts, origins
 }
 
 // #endregion

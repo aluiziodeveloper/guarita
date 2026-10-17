@@ -11,12 +11,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/aluiziodeveloper/guarita/internal/adapters/identity"
 	"github.com/aluiziodeveloper/guarita/internal/adapters/mcphttp"
 	"github.com/aluiziodeveloper/guarita/internal/adapters/mcpproxy"
+	"github.com/aluiziodeveloper/guarita/internal/adapters/scanner"
 	"github.com/aluiziodeveloper/guarita/internal/adapters/sqlitestore"
 	"github.com/aluiziodeveloper/guarita/internal/app"
 	"github.com/aluiziodeveloper/guarita/internal/platform/secret"
@@ -37,24 +37,24 @@ func serveHTTP(
 	stderr io.Writer,
 ) error {
 	logger := slog.New(slog.NewJSONHandler(stderr, nil))
-	catalog, closeCatalog, err := openCatalog(ctx, c, logger)
+	store, closeStore, err := openStore(ctx, c, logger)
 	if err != nil {
 		return err
 	}
-	defer closeCatalog()
+	defer closeStore()
 	listener, err := net.Listen("tcp", c.listen)
 	if err != nil {
 		return err
 	}
-	endpoint, err := newEndpoint(c, policy, catalog,
+	endpoint, err := newEndpoint(c, policy, store,
 		listener.Addr().String(), logger)
 	if err != nil {
 		_ = listener.Close()
 		return err
 	}
 	server := newServer(endpoint)
-	_, _ = fmt.Fprintf(stderr, "guarita: escutando em http://%s/mcp\n",
-		listener.Addr())
+	_, _ = fmt.Fprintf(stderr, "guarita: escutando em http://%s%s\n",
+		listener.Addr(), c.servers[0].path())
 	served := make(chan error, 1)
 	go func() { served <- server.Serve(listener) }()
 	return shutdown(ctx, server, served)
@@ -98,31 +98,61 @@ func shutdown(
 // #endregion
 
 // #region cmd-guarita-new-endpoint
-// newEndpoint compõe o endpoint: a guarda de Host e Origin na frente de
-// tudo, a identidade do agente em /mcp e os metadados do recurso.
+// newEndpoint compõe o endpoint: a guarda na frente de tudo; cada
+// servidor no seu caminho, com identidade, catálogo e metadados.
 func newEndpoint(
-	c config, policy app.PolicyEvaluator, catalog *app.PinCatalog,
+	c config, policy app.PolicyEvaluator, store app.CatalogStore,
 	addr string, logger *slog.Logger,
 ) (http.Handler, error) {
-	resource := cmp.Or(c.auth.resource, "http://"+addr+"/mcp")
-	require, metadata, err := newAuth(c, resource, logger)
-	if err != nil {
-		return nil, err
-	}
-	handler, err := newHandler(c, policy, catalog, logger)
-	if err != nil {
-		return nil, err
-	}
 	guard, err := newGuard(c, addr)
 	if err != nil {
 		return nil, err
 	}
 	mux := http.NewServeMux()
-	mux.Handle("/mcp", require(handler))
-	if metadata != nil {
-		mux.Handle(identity.MetadataPath, metadata)
+	named := routes{}
+	for _, server := range c.servers {
+		route, metadata, err := newRoute(c, server, policy, store, addr,
+			logger)
+		if err != nil {
+			return nil, err
+		}
+		if server.name == "" {
+			mux.Handle("/mcp", route)
+			mux.Handle(identity.MetadataPath, metadata)
+			continue
+		}
+		named[server.name] = route
+		mux.Handle(identity.MetadataPath+server.path(), metadata)
 	}
+	mux.Handle("/mcp/{server}", named)
 	return guard.Wrap(mux), nil
+}
+
+// #endregion
+
+// #region cmd-guarita-new-route
+// newRoute monta um servidor: o recurso protegido é o caminho dele, e
+// um token emitido para outro servidor da Guarita não serve aqui.
+func newRoute(
+	c config, server upstreamServer, policy app.PolicyEvaluator,
+	store app.CatalogStore, addr string, logger *slog.Logger,
+) (http.Handler, http.Handler, error) {
+	resource := "http://" + addr + server.path()
+	metadataURL := "http://" + addr + identity.MetadataPath
+	if server.name == "" {
+		resource = cmp.Or(c.auth.resource, resource)
+	} else {
+		metadataURL += server.path()
+	}
+	require, metadata, err := newAuth(c, resource, metadataURL, logger)
+	if err != nil {
+		return nil, nil, err
+	}
+	handler, err := newHandler(c, server, policy, store, logger)
+	if err != nil {
+		return nil, nil, err
+	}
+	return require(handler), metadata, nil
 }
 
 // #endregion
@@ -130,22 +160,21 @@ func newEndpoint(
 // #region cmd-guarita-new-auth
 // newAuth monta a verificação do agente. Sem -agent-key, ela só é
 // aceita em loopback, e o registro avisa; fora dele, a partida falha.
-func newAuth(c config, resource string, logger *slog.Logger) (
-	identity.Middleware, http.Handler, error,
-) {
+func newAuth(
+	c config, resource, metadataURL string, logger *slog.Logger,
+) (identity.Middleware, http.Handler, error) {
 	if c.auth.keyFile == "" {
 		if len(c.hosts) > 0 {
 			return nil, nil, errAuthRequired
 		}
-		logger.Warn("sem autenticação do agente; aceita só em loopback")
-		return passThrough, nil, nil
+		logger.Warn("sem autenticação do agente; aceita só em loopback",
+			"resource", resource)
+		return passThrough, http.NotFoundHandler(), nil
 	}
 	verifier, err := loadVerifier(c.auth, resource)
 	if err != nil {
 		return nil, nil, err
 	}
-	metadataURL := strings.TrimSuffix(resource, "/mcp") +
-		identity.MetadataPath
 	return identity.Require(verifier, metadataURL),
 		identity.Metadata(resource, c.auth.issuer), nil
 }
@@ -174,10 +203,10 @@ func passThrough(next http.Handler) http.Handler { return next }
 
 // newHandler monta o proxy com a credencial da Guarita, se houver.
 func newHandler(
-	c config, policy app.PolicyEvaluator, catalog *app.PinCatalog,
-	logger *slog.Logger,
+	c config, server upstreamServer, policy app.PolicyEvaluator,
+	store app.CatalogStore, logger *slog.Logger,
 ) (*mcphttp.Handler, error) {
-	upstream, err := url.Parse(c.upstream)
+	upstream, err := url.Parse(server.url)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +224,10 @@ func newHandler(
 			mcphttp.WithUpstreamCredential(credential))
 	}
 	var useCase []app.Option
-	if catalog != nil { // o mesmo catálogo filtra a lista e nega a chamada
+	if store != nil { // o mesmo catálogo filtra a lista e nega a chamada
+		catalog := app.NewPinCatalog(store, server.catalogKey(),
+			app.WithScanner(scanner.Structural{}),
+			app.WithRejections(logRejection(logger)))
 		useCase = append(useCase, app.WithCatalog(catalog))
 		options = append(options, mcphttp.WithCatalog(catalog))
 	}
@@ -216,10 +248,11 @@ func newGuard(c config, addr string) (*mcphttp.Guard, error) {
 }
 
 // #region cmd-guarita-open-catalog
-// openCatalog abre o catálogo do servidor em -upstream. Sem -catalog, a
-// Guarita segue sem ele e avisa: qualquer definição chega ao agente.
-func openCatalog(ctx context.Context, c config, logger *slog.Logger) (
-	*app.PinCatalog, func(), error,
+// openStore abre o banco do catálogo, um só para todos os servidores:
+// é nele que a colisão de nomes entre eles aparece. Sem -catalog, a
+// Guarita avisa que não fixa definições.
+func openStore(ctx context.Context, c config, logger *slog.Logger) (
+	app.CatalogStore, func(), error,
 ) {
 	if c.catalogFile == "" {
 		logger.Warn("sem catálogo; as definições não são fixadas")
@@ -229,8 +262,7 @@ func openCatalog(ctx context.Context, c config, logger *slog.Logger) (
 	if err != nil {
 		return nil, nil, err
 	}
-	closeStore := func() { _ = store.Close() }
-	return app.NewPinCatalog(store, c.upstream), closeStore, nil
+	return store, func() { _ = store.Close() }, nil
 }
 
 // #endregion
