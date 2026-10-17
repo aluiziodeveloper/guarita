@@ -74,7 +74,40 @@ func TestOpen_migracoesIdempotentes(t *testing.T) {
 	var version int
 	_ = again.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version)
 	_, found, _ := again.Pin(ctx, server, "read_file")
-	if version != 1 || !found {
+	if version != 2 || !found {
 		t.Fatalf("user_version = %d, pin encontrado = %v", version, found)
 	}
 }
+
+// #region sqlitestore-migration-test
+// Um banco criado só com a 0001, com um pin, recebe a 0002 ao abrir: o
+// pin continua lá, sem marca, e passa a aceitar a definição divergente.
+func TestOpen_migraSobreDadosExistentes(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "catalog.db")
+	old, err := open(ctx, path, 1)
+	if err != nil {
+		t.Fatalf("abrir na 0001: %v", err)
+	}
+	_ = old.SavePin(ctx, pin("read_file", "sha256:aaa"))
+	_ = old.Close()
+
+	store, err := Open(ctx, path)
+	if err != nil {
+		t.Fatalf("migrar para a 0002: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	before, found, _ := store.Pin(ctx, server, "read_file")
+	t.Logf("depois da 0002: encontrado=%v changed=%v", found,
+		before.Changed)
+	err = store.MarkChanged(ctx, server, "read_file", "sha256:bbb",
+		[]byte(`{"name":"read_file","description":"nova"}`))
+	after, _, _ := store.Pin(ctx, server, "read_file")
+	if err != nil || !found || before.Changed || !after.Changed ||
+		after.SeenFingerprint != "sha256:bbb" ||
+		after.Fingerprint != "sha256:aaa" {
+		t.Fatalf("antes %+v, depois %+v, err %v", before, after, err)
+	}
+}
+
+// #endregion

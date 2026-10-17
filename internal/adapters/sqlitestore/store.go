@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"time"
 
+	"github.com/aluiziodeveloper/guarita/internal/app"
 	"github.com/aluiziodeveloper/guarita/internal/domain"
 
 	_ "modernc.org/sqlite" // registra o driver "sqlite", sem cgo
@@ -24,6 +25,8 @@ import (
 var migrations embed.FS
 
 // #endregion
+
+var _ app.CatalogStore = (*Store)(nil)
 
 // Store é o catálogo em SQLite.
 type Store struct {
@@ -116,9 +119,12 @@ func (s *Store) Pin(ctx context.Context, server, tool string) (
 ) {
 	pin := domain.Pin{Server: server, Tool: tool}
 	var definition string
-	err := s.db.QueryRowContext(ctx, `SELECT fingerprint, definition
+	var seenFingerprint, seenDefinition sql.NullString
+	err := s.db.QueryRowContext(ctx, `SELECT fingerprint, definition,
+		changed, seen_fingerprint, seen_definition
 		FROM pins WHERE server = ? AND tool = ?`, server, tool).
-		Scan(&pin.Fingerprint, &definition)
+		Scan(&pin.Fingerprint, &definition, &pin.Changed,
+			&seenFingerprint, &seenDefinition)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.Pin{}, false, nil
 	}
@@ -126,6 +132,10 @@ func (s *Store) Pin(ctx context.Context, server, tool string) (
 		return domain.Pin{}, false, err
 	}
 	pin.Definition = []byte(definition)
+	pin.SeenFingerprint = domain.Fingerprint(seenFingerprint.String)
+	if seenDefinition.Valid {
+		pin.SeenDefinition = []byte(seenDefinition.String)
+	}
 	return pin, true, nil
 }
 
@@ -141,6 +151,23 @@ func (s *Store) SavePin(ctx context.Context, pin domain.Pin) error {
 		ON CONFLICT (server, tool) DO NOTHING`,
 		pin.Server, pin.Tool, pin.Fingerprint, string(pin.Definition),
 		s.now().UTC().Format(time.RFC3339))
+	return err
+}
+
+// #endregion
+
+// #region sqlitestore-mark-changed
+// MarkChanged registra a definição divergente sem tocar na fixada: o
+// operador precisa das duas para decidir.
+func (s *Store) MarkChanged(
+	ctx context.Context, server, tool string,
+	seen domain.Fingerprint, definition []byte,
+) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE pins SET changed = 1,
+		seen_fingerprint = ?, seen_definition = ?, changed_at = ?
+		WHERE server = ? AND tool = ?`,
+		seen, string(definition), s.now().UTC().Format(time.RFC3339),
+		server, tool)
 	return err
 }
 
