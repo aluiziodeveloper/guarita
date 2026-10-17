@@ -68,3 +68,25 @@ jobs:
       - name: Build laboratory image
         run: docker build -f deploy/Dockerfile -t guarita-lab:ci .
   # #endregion
+
+  # #region ci-attack-suite
+  attacks:
+    name: Attack suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@v7.0.0
+        with:
+          go-version: "1.27.x"
+          check-latest: true
+          cache: true
+
+      # Um job à parte: a falha de um ataque aparece pelo nome no
+      # resumo da execução, separada de lint e formatação, e o relato
+      # de cada ataque fica no log.
+      - name: Run laboratory attacks
+        run: go test -race -count=1 -v ./attacks/...
+  # #endregion
