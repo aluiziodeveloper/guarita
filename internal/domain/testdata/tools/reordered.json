@@ -1,0 +1,8 @@
+{
+  "inputSchema": {
+    "properties": {"path": {"type": "string"}},
+    "type": "object"
+  },
+  "description": "Lê um arquivo.",
+  "name": "read_file"
+}
