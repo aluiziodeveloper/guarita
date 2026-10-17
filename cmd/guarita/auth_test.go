@@ -42,9 +42,17 @@ func labFiles(t *testing.T) (pub, cred string, key ed25519.PrivateKey) {
 
 func agentToken(t *testing.T, key ed25519.PrivateKey, aud string) string {
 	t.Helper()
+	return tokenFor(t, key, aud, "agente-1")
+}
+
+// tokenFor emite um token do laboratório para o agente dado.
+func tokenFor(
+	t *testing.T, key ed25519.PrivateKey, aud, agent string,
+) string {
+	t.Helper()
 	signed, _ := jwt.NewWithClaims(jwt.SigningMethodEdDSA,
 		jwt.RegisteredClaims{
-			Issuer: labIssuer, Subject: "agente-1",
+			Issuer: labIssuer, Subject: agent,
 			Audience:  jwt.ClaimStrings{aud},
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute)),

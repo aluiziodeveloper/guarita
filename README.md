@@ -155,6 +155,8 @@ No Capítulo 9, a referência é `cap09`; `desafio/cap09` traz os testes da apro
 
 No Capítulo 10, a referência é `cap10`; `desafio/cap10` traz os testes dos seletores de variação e `cap10-desafio`, a solução.
 
+No Capítulo 11, a referência é `cap11`; `desafio/cap11` traz os testes da regra de `send_email` e `cap11-desafio`, a solução.
+
 ## Proxy stdio
 
 A partir do Capítulo 5, a Guarita fica entre o agente e um servidor MCP que fala pelo transporte stdio. Configure o agente para executar a Guarita no lugar do servidor, com o comando do servidor depois de `--`:
@@ -242,6 +244,21 @@ A partir do Capítulo 10, a Guarita protege vários servidores ao mesmo tempo. C
 O namespace tem de 1 a 32 caracteres em `[a-z0-9-]`. Cada servidor é um recurso protegido próprio: o *token* do agente precisa ter na audiência o endereço daquele caminho, e os metadados ficam em `/.well-known/oauth-protected-resource/mcp/{namespace}`.
 
 Com `-catalog`, toda definição passa antes por uma varredura estrutural: é recusada a que tem caracteres de formatação (largura zero, controles de direção, *tags* Unicode), caracteres de controle, texto que muda sob NFKC ou nome fora do conjunto da especificação (`[A-Za-z0-9_.-]`, até 128 caracteres). Uma ferramenta cujo nome, ignorando maiúsculas e trocando `-` e `.` por `_`, já foi fixado por outro servidor também é recusada. Cada recusa aparece no registro com o servidor, a ferramenta, o motivo e os sinais.
+
+## Políticas em Rego
+
+A partir do Capítulo 11, a política pode vir de regras em Rego, avaliadas pelo OPA embutido na Guarita. `-policy` aponta o diretório com os módulos `.rego` (os `_test.rego` ficam de fora) e substitui `-allow`; as duas opções juntas são erro de uso:
+
+```bash
+./guarita -policy policies -catalog catalog.db -agent-key agent.pub -agent-issuer https://auth.lab.test \
+  -server files=http://127.0.0.1:9001/mcp -server db=http://127.0.0.1:9002/mcp
+```
+
+A política recebe como `input` o agente (o `sub` do *token*), o servidor (o namespace de `-server`), a ferramenta e os argumentos, e responde em `data.guarita.decision` com `allow`, `deny` ou `require_approval`. A de `policies/` nega por padrão e concede por agente e servidor, em `grants.rego`. Uma política que não compila impede a partida; uma decisão indefinida nega a chamada.
+
+```bash
+go run github.com/open-policy-agent/opa@v1.21.1 test -v policies
+```
 
 ## Ataques de laboratório
 

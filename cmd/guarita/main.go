@@ -15,14 +15,14 @@ import (
 
 	"github.com/aluiziodeveloper/guarita/internal/adapters/mcphttp"
 	"github.com/aluiziodeveloper/guarita/internal/adapters/mcpproxy"
-	"github.com/aluiziodeveloper/guarita/internal/adapters/policystatic"
 	"github.com/aluiziodeveloper/guarita/internal/app"
 	"github.com/aluiziodeveloper/guarita/internal/domain"
 )
 
-const usage = "uso: guarita [-allow ferramenta,…] -- " +
+const usage = "uso: guarita [-allow ferramenta,… | -policy dir] -- " +
 	"<comando do servidor MCP> [argumentos]\n" +
-	"     guarita [-allow …] [-listen endereço] [-host …] [-origin …] " +
+	"     guarita [-allow … | -policy dir] [-listen endereço] [-host …] " +
+	"[-origin …] [-server nome=URL …] " +
 	"-upstream <URL do servidor MCP>"
 
 var errUsage = errors.New(usage)
@@ -52,7 +52,7 @@ func run(
 	if err != nil {
 		return err
 	}
-	policy, err := policystatic.New(config.decisions)
+	policy, err := newPolicy(ctx, config)
 	if err != nil {
 		return err
 	}
@@ -67,7 +67,8 @@ func run(
 // #endregion
 
 type config struct {
-	decisions   map[string]domain.Decision
+	allow       []string         // -allow: a lista do Capítulo 4
+	policyDir   string           // -policy: as regras em Rego
 	command     []string         // modo stdio
 	servers     []upstreamServer // modo HTTP: -upstream e -server
 	listen      string
@@ -98,8 +99,8 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	}
 	flags := flag.NewFlagSet("guarita", flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	allow := flags.String("allow", "", "ferramentas permitidas")
 	c := config{command: command}
+	allow := policyFlags(flags, &c)
 	upstream, hosts, origins := httpFlags(flags, &c)
 	if err := flags.Parse(flagArgs); err != nil {
 		return config{}, errors.Join(errUsage, err)
@@ -114,7 +115,7 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 		(c.catalogFile != "" && len(c.servers) == 0) {
 		return config{}, errUsage
 	}
-	c.decisions = allowAll(list(*allow))
+	c.allow = list(*allow)
 	c.hosts, c.origins = list(*hosts), list(*origins)
 	return c, nil
 }

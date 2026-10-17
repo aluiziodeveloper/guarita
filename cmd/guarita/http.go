@@ -223,7 +223,9 @@ func newHandler(
 		options = append(options,
 			mcphttp.WithUpstreamCredential(credential))
 	}
-	var useCase []app.Option
+	useCase := []app.Option{ // a política sabe onde e quem
+		app.WithServer(server.name), app.WithAgent(identity.Subject),
+	}
 	if store != nil { // o mesmo catálogo filtra a lista e nega a chamada
 		catalog := app.NewPinCatalog(store, server.catalogKey(),
 			app.WithScanner(scanner.Structural{}),
