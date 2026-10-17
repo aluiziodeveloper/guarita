@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -115,6 +116,18 @@ func characters(field, text string) []domain.Finding {
 
 // #endregion
 
+// safe escreve uma chave no caminho do campo. A que não é ASCII
+// imprimível vai entre aspas, com escapes: o registro do operador não
+// pode carregar o texto disfarçado que acabou de achar.
+func safe(key string) string {
+	for _, r := range key {
+		if r < ' ' || r > '~' {
+			return strconv.QuoteToASCII(key)
+		}
+	}
+	return key
+}
+
 // walk chama visit para cada string do valor, com o caminho dela. As
 // chaves de objeto também são texto que chega ao modelo.
 func walk(path string, value any, visit func(field, text string)) {
@@ -128,7 +141,7 @@ func walk(path string, value any, visit func(field, text string)) {
 		}
 		slices.Sort(keys) // ordem estável nos relatórios
 		for _, key := range keys {
-			field := strings.TrimPrefix(path+"."+key, ".")
+			field := strings.TrimPrefix(path+"."+safe(key), ".")
 			visit(field+" (chave)", key)
 			walk(field, v[key], visit)
 		}

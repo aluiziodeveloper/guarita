@@ -1,0 +1,1 @@
+{"name":"read_file","description":"Lê um arquivo.","inputSchema":{"type":"object","properties":{"path":{"type":"string","description":"\u202e[LAB] texto invertido"}}}}
