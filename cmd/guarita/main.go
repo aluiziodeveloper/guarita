@@ -75,7 +75,8 @@ type config struct {
 	origins     []string
 	callTimeout time.Duration
 	auth        authConfig
-	catalogFile string // modo HTTP: o catálogo em SQLite
+	catalogFile string            // modo HTTP: o catálogo em SQLite
+	credentials map[string]string // -server-credential, por namespace
 }
 
 // authConfig é a identidade do modo HTTP: quem emite os tokens do
@@ -106,7 +107,9 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	if flags.NArg() > 0 {
 		return config{}, errUsage
 	}
-	c.servers = withUpstream(*upstream, c.servers)
+	if err := c.resolveServers(*upstream); err != nil {
+		return config{}, err
+	}
 	if (len(c.servers) == 0) == (len(command) == 0) ||
 		(c.catalogFile != "" && len(c.servers) == 0) {
 		return config{}, errUsage
@@ -127,6 +130,8 @@ func httpFlags(
 	upstream = flags.String("upstream", "", "URL do servidor HTTP")
 	flags.Func("server", "servidor com namespace: nome=URL (repetível)",
 		serverFlag(&c.servers))
+	flags.Func("server-credential", "credencial: nome=arquivo",
+		credentialFlag(c))
 	flags.StringVar(&c.listen, "listen", "127.0.0.1:8080", "escuta")
 	hosts = flags.String("host", "", "Host aceitos (padrão: loopback)")
 	origins = flags.String("origin", "", "origens aceitas")

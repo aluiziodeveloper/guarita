@@ -215,8 +215,8 @@ func newHandler(
 		mcphttp.WithLogger(logger),
 		mcphttp.WithAgent(identity.Subject),
 	}
-	if c.auth.credentialFile != "" {
-		credential, err := secret.ReadFile(c.auth.credentialFile)
+	if server.credential != "" {
+		credential, err := secret.ReadFile(server.credential)
 		if err != nil {
 			return nil, err
 		}

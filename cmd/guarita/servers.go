@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/http"
 	"regexp"
 	"strings"
@@ -15,8 +16,9 @@ import (
 // namespace dado pelo operador; vazio, é o servidor de -upstream, em
 // /mcp, como até o Capítulo 9.
 type upstreamServer struct {
-	name string
-	url  string
+	name       string
+	url        string
+	credential string // arquivo com a credencial só deste servidor
 }
 
 // validServerName limita o namespace a um trecho de caminho seguro.
@@ -24,6 +26,10 @@ var validServerName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,31}$`)
 
 var errServerName = errors.New(
 	"-server must be name=URL, name in [a-z0-9-], at most 32, unique")
+
+// errCredential recusa a credencial que não tem dono certo.
+var errCredential = errors.New("-server-credential must be name=file " +
+	"of a -server; -upstream-credential needs -upstream")
 
 // #region cmd-guarita-server-flag
 // serverFlag lê -server nome=URL, que pode se repetir. O nome não vem
@@ -39,21 +45,62 @@ func serverFlag(servers *[]upstreamServer) func(string) error {
 				return errServerName
 			}
 		}
-		*servers = append(*servers, upstreamServer{name, target})
+		server := upstreamServer{name: name, url: target}
+		*servers = append(*servers, server)
 		return nil
 	}
 }
 
 // #endregion
 
-// withUpstream põe o servidor de -upstream, se houver, primeiro: ele
-// fica em /mcp, como até o Capítulo 9.
-func withUpstream(upstream string, servers []upstreamServer) []upstreamServer {
-	if upstream == "" {
-		return servers
+// resolveServers põe o servidor de -upstream, se houver, primeiro (ele
+// fica em /mcp, como até o Capítulo 9) e entrega as credenciais.
+func (c *config) resolveServers(upstream string) error {
+	if upstream != "" {
+		c.servers = append([]upstreamServer{{url: upstream}},
+			c.servers...)
 	}
-	return append([]upstreamServer{{url: upstream}}, servers...)
+	return c.attachCredentials()
 }
+
+// credentialFlag lê -server-credential nome=arquivo.
+func credentialFlag(c *config) func(string) error {
+	return func(value string) error {
+		name, file, ok := strings.Cut(value, "=")
+		if _, repeated := c.credentials[name]; !ok || file == "" ||
+			repeated {
+			return errCredential
+		}
+		if c.credentials == nil {
+			c.credentials = map[string]string{}
+		}
+		c.credentials[name] = file
+		return nil
+	}
+}
+
+// #region cmd-guarita-attach-credentials
+// attachCredentials dá a cada servidor só a sua credencial. Uma para
+// todos entregaria a de um servidor a qualquer outro, inclusive a um
+// hostil: o roubo de credencial do Capítulo 8, entre servidores.
+func (c *config) attachCredentials() error {
+	unused := maps.Clone(c.credentials)
+	for i, server := range c.servers {
+		if server.name == "" {
+			c.servers[i].credential = c.auth.credentialFile
+			continue
+		}
+		c.servers[i].credential = unused[server.name]
+		delete(unused, server.name)
+	}
+	if len(unused) > 0 || (c.auth.credentialFile != "" &&
+		(len(c.servers) == 0 || c.servers[0].name != "")) {
+		return errors.Join(errUsage, errCredential)
+	}
+	return nil
+}
+
+// #endregion
 
 // path é onde o agente alcança o servidor na Guarita.
 func (s upstreamServer) path() string {

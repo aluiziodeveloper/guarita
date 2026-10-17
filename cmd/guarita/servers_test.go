@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -62,6 +63,57 @@ func TestRun_serverInvalido(t *testing.T) {
 			nopWriteCloser{nil}, io.Discard)
 		if !errors.Is(err, errUsage) {
 			t.Errorf("-server %q: %v", value, err)
+		}
+	}
+}
+
+// recorder responde e guarda o Authorization que recebeu.
+func recorder(seen chan<- string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		seen <- r.Header.Get("Authorization")
+		_, _ = io.WriteString(w, `{"jsonrpc":"2.0","id":1,"result":{}}`)
+	}
+}
+
+// #region cmd-guarita-credentials-test
+// Só files tem credencial. Ela não pode chegar a mail.
+func TestRun_credencialPorServidor(t *testing.T) {
+	fromFiles, fromMail := make(chan string, 1), make(chan string, 1)
+	files := httptest.NewServer(recorder(fromFiles))
+	mail := httptest.NewServer(recorder(fromMail))
+	t.Cleanup(files.Close)
+	t.Cleanup(mail.Close)
+	cred := filepath.Join(t.TempDir(), "files.cred")
+	_ = os.WriteFile(cred, []byte("cred-de-files\n"), 0o600)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	endpoint, _ := startHTTP(t, ctx, "-listen", "127.0.0.1:0",
+		"-server", "files="+files.URL, "-server", "mail="+mail.URL,
+		"-server-credential", "files="+cred)
+	base := strings.TrimSuffix(endpoint, "/mcp/files")
+	const ping = `{"jsonrpc":"2.0","id":1,"method":"ping"}`
+	_ = listBody(t, base+"/mcp/files", ping)
+	_ = listBody(t, base+"/mcp/mail", ping)
+	gotFiles, gotMail := <-fromFiles, <-fromMail
+	t.Logf("files recebeu %q; mail recebeu %q", gotFiles, gotMail)
+	if gotFiles != "Bearer cred-de-files" || gotMail != "" {
+		t.Fatal("a credencial foi para o servidor errado")
+	}
+}
+
+// #endregion
+
+func TestRun_credencialSemDono(t *testing.T) {
+	for _, args := range [][]string{
+		{"-server", "files=http://x", "-upstream-credential", "c"},
+		{"-server", "files=http://x", "-server-credential", "mail=c"},
+		{"-server", "files=http://x", "-server-credential", "files"},
+	} {
+		err := run(context.Background(), args,
+			io.NopCloser(strings.NewReader("")),
+			nopWriteCloser{nil}, io.Discard)
+		if !errors.Is(err, errUsage) {
+			t.Errorf("%v: %v", args, err)
 		}
 	}
 }
