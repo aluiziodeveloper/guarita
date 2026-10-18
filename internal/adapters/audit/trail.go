@@ -168,6 +168,16 @@ type Report struct {
 // precisa seguir a anterior. A primeira quebra para a leitura, com o
 // número da linha.
 func Verify(r io.Reader) (Report, error) {
+	return verifyEach(r, func(domain.AuditEntry) {})
+}
+
+// #endregion
+
+// #region audit-verify-each
+// verifyEach é Verify com uma visita a cada entrada que confere.
+func verifyEach(
+	r io.Reader, visit func(domain.AuditEntry),
+) (Report, error) {
 	lines := bufio.NewScanner(r)
 	lines.Buffer(make([]byte, 4096), maxLine)
 	var report Report
@@ -183,6 +193,7 @@ func Verify(r io.Reader) (Report, error) {
 		if err := e.Follows(report.Last); err != nil {
 			return report, fmt.Errorf("line %d: %w", n, err)
 		}
+		visit(e)
 		if n == 1 {
 			report.Since = e.Time
 		}
