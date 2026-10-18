@@ -49,3 +49,36 @@ func TestReadFile_recusaArquivoAberto(t *testing.T) {
 		t.Fatalf("0600: %q, %v", s.Reveal(), err)
 	}
 }
+
+// #region secret-private-test
+// A regra inteira, sem precisar de arquivos do root: os demais nunca
+// leem; o grupo, só com o arquivo do root e o grupo do processo.
+func TestPrivate(t *testing.T) {
+	me := os.Getegid()
+	user, root := fileOwner{true, 1000, me}, fileOwner{true, 0, me}
+	for _, c := range []struct {
+		name string
+		mode os.FileMode
+		o    fileOwner
+		want bool
+	}{
+		{"só o dono", 0o600, user, true},
+		{"legível por todos", 0o644, root, false},
+		{"grupo, arquivo do usuário", 0o640, user, false},
+		{
+			"grupo, do root, outro grupo", 0o440,
+			fileOwner{true, 0, me + 1},
+			false,
+		},
+		{"grupo, do root, meu grupo", 0o440, root, true},
+		{"grupo, dono desconhecido", 0o440, fileOwner{}, false},
+	} {
+		got := private(c.mode, c.o)
+		t.Logf("%-30s %v -> %v", c.name, c.mode, got)
+		if got != c.want {
+			t.Errorf("%s: %v", c.name, got)
+		}
+	}
+}
+
+// #endregion
