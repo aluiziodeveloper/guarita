@@ -1,0 +1,17 @@
+# O Dependabot abre um pull request quando sai uma versão nova de um
+# módulo, de uma action fixada por hash ou de uma imagem fixada por
+# digest. A CI do pull request roda o govulncheck e a suíte inteira.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /deploy
+    schedule:
+      interval: weekly
