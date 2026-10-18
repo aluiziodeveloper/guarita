@@ -22,6 +22,7 @@ const (
 	stageInjection  = "injection"
 	stageClassifier = "classifier"
 	stageMark       = "mark"
+	stageQuota      = "quota"
 )
 
 var (
@@ -36,8 +37,7 @@ var (
 // Uma etapa nova entra aqui, e em nenhum outro lugar: a montagem, o
 // caso de uso e o transporte não mudam.
 func registry(
-	c inspectConfig, catalog *app.PinCatalog,
-	classifier app.ResultInspector,
+	c inspectConfig, catalog *app.PinCatalog, d deciders,
 ) pipeline.Registry {
 	return pipeline.Registry{
 		stageSchema: requires(catalog, "-catalog",
@@ -48,11 +48,15 @@ func registry(
 		stageInjection: always(pipeline.Stage{
 			Result: injection.New(injection.DefaultActions()),
 		}),
-		stageClassifier: requires(classifier, "-classifier",
+		stageClassifier: requires(d.classifier, "-classifier",
 			func(classifier app.ResultInspector) pipeline.Stage {
 				return pipeline.Stage{Result: classifier}
 			}),
 		stageMark: always(pipeline.Stage{Marker: untrusted.New()}),
+		stageQuota: requires(d.quota, "-quota or -budget",
+			func(quota app.Inspector) pipeline.Stage {
+				return pipeline.Stage{Call: quota}
+			}),
 	}
 }
 
@@ -92,17 +96,18 @@ func newDLP(c inspectConfig) *dlp.Inspector {
 }
 
 // #region cmd-guarita-default-stages
-// defaultStages traduz as opções dos Capítulos 13 a 15 para a linha de
-// todas as rotas, na ordem que elas sempre tiveram: na ida, o esquema,
-// a conferência mais barata, antes do DLP; na volta, as regras antes
+// defaultStages traduz as opções dos Capítulos 13 a 18 para a linha de
+// todas as rotas: na ida, a cota primeiro, para que um laço não pague
+// as outras etapas, e o esquema antes do DLP; na volta, as regras antes
 // do classificador, e a marcação no fim.
-func defaultStages(c inspectConfig, hasCatalog bool) []string {
+func defaultStages(c inspectConfig, catalog, quota bool) []string {
 	var names []string
 	for _, stage := range []struct {
 		on   bool
 		name string
 	}{
-		{c.validation && hasCatalog, stageSchema},
+		{quota, stageQuota},
+		{c.validation && catalog, stageSchema},
 		{c.dlp, stageDLP},
 		{c.results, stageInjection},
 		{c.classifier.endpoint != "", stageClassifier},
@@ -148,16 +153,16 @@ func pipelineFlag(c *inspectConfig) func(string) error {
 // rota sem uma etapa de -require-stages não sobe.
 func routeLine(
 	c inspectConfig, route string, catalog *app.PinCatalog,
-	classifier app.ResultInspector, logger *slog.Logger,
+	d deciders, logger *slog.Logger,
 ) (pipeline.Pipeline, error) {
 	names, ok := c.pipelines[route]
 	if !ok || route == "" {
 		names, ok = c.pipelines["*"]
 	}
 	if !ok {
-		names = defaultStages(c, catalog != nil)
+		names = defaultStages(c, catalog != nil, d.quota != nil)
 	}
-	line, err := registry(c, catalog, classifier).Build(names)
+	line, err := registry(c, catalog, d).Build(names)
 	if err != nil {
 		return line, fmt.Errorf("route %q: %w", route, err)
 	}

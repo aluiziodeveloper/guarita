@@ -86,6 +86,7 @@ type config struct {
 	inspect     inspectConfig     // modo HTTP: os inspetores
 	credentials map[string]string // -server-credential, por namespace
 	sandbox     sandboxConfig     // modo stdio: o contêiner do servidor
+	limits      limitsConfig      // modo HTTP: cotas e disjuntor
 }
 
 // authConfig é a identidade do modo HTTP: quem emite os tokens do

@@ -45,6 +45,7 @@ type deciders struct {
 	policy     app.PolicyEvaluator
 	queue      *approval.Queue     // nil sem -operators
 	classifier app.ResultInspector // nil sem -classifier
+	quota      app.Inspector       // nil sem -quota nem -budget
 }
 
 // options devolve a opção do aprovador, se houver fila.

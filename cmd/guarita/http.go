@@ -72,6 +72,9 @@ func listen(
 	if err != nil {
 		return nil, nil, err
 	}
+	if d.quota, err = c.limits.newQuota(); err != nil {
+		return nil, nil, err
+	}
 	listener, err := net.Listen("tcp", c.listen)
 	if err != nil {
 		return nil, nil, err
@@ -238,6 +241,9 @@ func newHandler(
 		mcphttp.WithLogger(logger),
 		mcphttp.WithAgent(identity.Subject),
 	}
+	if rt := c.limits.transport(server.name, logger); rt != nil {
+		options = append(options, mcphttp.WithTransport(rt))
+	}
 	if server.credential != "" {
 		credential, err := secret.ReadFile(server.credential)
 		if err != nil {
@@ -257,8 +263,7 @@ func newHandler(
 		useCase = append(useCase, app.WithCatalog(catalog))
 		options = append(options, mcphttp.WithCatalog(catalog))
 	}
-	line, err := routeLine(c.inspect, server.name, catalog, d.classifier,
-		logger)
+	line, err := routeLine(c.inspect, server.name, catalog, d, logger)
 	if err != nil {
 		return nil, err
 	}
