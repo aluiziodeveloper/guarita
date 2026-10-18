@@ -106,6 +106,11 @@ func Model() []Threat {
 			"Página da web alcança a Guarita local por DNS rebinding",
 			edge(agent, out), 7, spoofing, elevationOfPrivilege,
 		).with(ThreatStatusPartiallyMitigated),
+		threat("audit-tampering",
+			"Registro de decisões adulterado, apagado ou com segredos",
+			edge(operator, out), 19, tampering, repudiation,
+			informationDisclosure,
+		).with(ThreatStatusPartiallyMitigated),
 	}
 }
 
