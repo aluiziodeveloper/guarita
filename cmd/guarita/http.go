@@ -243,13 +243,15 @@ func newHandler(
 	useCase := []app.Option{ // a política sabe onde e quem
 		app.WithServer(server.name), app.WithAgent(identity.Subject),
 	}
+	var catalog *app.PinCatalog
 	if store != nil { // o mesmo catálogo filtra a lista e nega a chamada
-		catalog := app.NewPinCatalog(store, server.catalogKey(),
+		catalog = app.NewPinCatalog(store, server.catalogKey(),
 			app.WithScanner(scanner.Structural{}),
 			app.WithRejections(logRejection(logger)))
 		useCase = append(useCase, app.WithCatalog(catalog))
 		options = append(options, mcphttp.WithCatalog(catalog))
 	}
+	useCase = append(useCase, inspectors(c.inspect, catalog, logger)...)
 	useCase = append(useCase, d.options()...) // a fila, se houver
 	gate := mcpproxy.NewGate(app.NewInterceptCall(d.policy, nil,
 		useCase...))

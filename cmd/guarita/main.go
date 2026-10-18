@@ -83,6 +83,7 @@ type config struct {
 	auth        authConfig
 	catalogFile string            // modo HTTP: o catálogo em SQLite
 	approval    approvalConfig    // modo HTTP: a aprovação humana
+	inspect     inspectConfig     // modo HTTP: os inspetores
 	credentials map[string]string // -server-credential, por namespace
 }
 
@@ -153,6 +154,7 @@ func httpFlags(
 	flags.StringVar(&c.auth.credentialFile, "upstream-credential", "",
 		"arquivo com a credencial da Guarita para o servidor")
 	approvalFlags(flags, &c.approval)
+	inspectFlags(flags, &c.inspect)
 	flags.StringVar(&c.catalogFile, "catalog", "",
 		"arquivo SQLite do catálogo de ferramentas")
 	return upstream, hosts, origins
