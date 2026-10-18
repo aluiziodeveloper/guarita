@@ -58,18 +58,3 @@ func TestInspect_cotaECusto(t *testing.T) {
 }
 
 // #endregion
-
-// O orçamento barra a chamada, e a ficha do balde de chamadas já foi
-// tirada: um laço insistente continua freado pelos dois.
-func TestInspect_recusadaContaNaCota(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		i := New(Limits{
-			Calls:  map[string]Rate{"*": rate(t, "60/m")},
-			Budget: new(rate(t, "10/h")),
-		})
-		got, findings := count(t, i, "laco", "web_search", 61)
-		if got != 10 || findings[0].Signal != SignalQuota {
-			t.Errorf("passaram %d; último achado %v", got, findings)
-		}
-	})
-}

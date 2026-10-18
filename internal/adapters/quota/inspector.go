@@ -53,15 +53,20 @@ func (i *Inspector) Inspect(
 	_ context.Context, input domain.PolicyInput,
 ) (domain.Inspection, error) {
 	tool := input.Call.ToolName
+	var calls *Bucket
 	if r, ok := i.rate(tool); ok {
 		k := key{"calls", input.Agent, input.Server, tool}
-		if ok, wait := i.bucket(k, r).Take(1); !ok {
+		calls = i.bucket(k, r)
+		if ok, wait := calls.Take(1); !ok {
 			return deny(SignalQuota, tool, wait), nil
 		}
 	}
 	if b := i.limits.Budget; b != nil {
 		k := key{kind: "budget", agent: input.Agent}
 		if ok, wait := i.bucket(k, *b).Take(i.cost(tool)); !ok {
+			if calls != nil {
+				calls.Give(1) // a chamada não saiu
+			}
 			return deny(SignalBudget, tool, wait), nil
 		}
 	}

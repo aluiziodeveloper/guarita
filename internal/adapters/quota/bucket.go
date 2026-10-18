@@ -92,3 +92,23 @@ func (b *Bucket) Take(n int64) (bool, time.Duration) {
 }
 
 // #endregion
+
+// #region quota-give
+// Give devolve n fichas: puxa o tat n intervalos para trás, sem passar
+// do agora, que é o balde cheio. Um balde já cheio não muda. A troca é
+// por compare-and-swap, como em Take.
+func (b *Bucket) Give(n int64) {
+	now := time.Since(b.epoch).Nanoseconds()
+	for {
+		old := b.tat.Load()
+		if old <= now {
+			return
+		}
+		next := max(old-n*b.interval, now)
+		if b.tat.CompareAndSwap(old, next) {
+			return
+		}
+	}
+}
+
+// #endregion
