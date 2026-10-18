@@ -322,6 +322,20 @@ A partir do Capítulo 16, cada servidor de `-server` pode ter a própria linha d
 - `-pipeline etapa,…`, sem nome, vale para as rotas que não têm linha própria.
 - `-require-stages` recusa a partida de uma rota que não tenha as etapas listadas. Com `-require-stages dlp`, a configuração acima não sobe, porque a rota `web` não tem `dlp`: é a conferência que pega a lacuna antes de um vazamento.
 
+## Sandbox do servidor stdio
+
+A partir do Capítulo 17, o servidor do modo stdio pode rodar num contêiner, com o perfil da Guarita:
+
+```bash
+./guarita -policy policies -sandbox guarita-lab:cap17 \
+  -sandbox-mount "$PWD/dados:/data" \
+  -- /lab-files -root /data
+```
+
+- O contêiner roda com `--init`, sem rede (`--network none`), com o sistema de arquivos só de leitura (`/tmp` em memória, sem execução), como o usuário 65532, sem *capabilities*, com `no-new-privileges`, com o perfil *seccomp* padrão do Docker e com limites de 256 MiB e 64 processos. Nenhuma variável de ambiente do host entra.
+- Cada `-sandbox-mount origem:destino` é só de leitura; `:rw` no fim a torna gravável. A origem é resolvida seguindo os *symlinks*, e a Guarita recusa diretórios do sistema (`/etc`, `/proc`, `/run`, onde fica o *socket* do Docker, e outros), diretórios de credenciais da home (`.ssh`, `.aws`, `.config` e outros) e qualquer montagem que contenha a home inteira.
+- `-sandbox` só vale no modo stdio: os servidores de `-upstream` e `-server` são remotos.
+
 ## Ataques de laboratório
 
 O diretório [`attacks/`](attacks/README.md) reúne os ataques reproduzíveis, um pacote por ataque, cada um com o teste que o roda sem e com a defesa. Eles rodam com o resto da suíte em `go test ./...`; a medida do classificador só roda com um Ollama local.
