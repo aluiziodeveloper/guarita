@@ -307,6 +307,21 @@ docker exec guarita-ollama ollama pull qwen2.5:7b
 - `-classifier-timeout` (padrão 5 s) é o prazo de cada resultado. Na partida, a Guarita confere que o modelo está instalado e o aquece.
 - `-classifier-on-error` decide o que acontece com o modelo fora do ar ou lento: `deny` (padrão) barra o resultado; `rules` deixa a decisão com as regras de `-inspect-results` e registra a falha.
 
+## Linha de inspetores por rota
+
+A partir do Capítulo 16, cada servidor de `-server` pode ter a própria linha de inspetores, na ordem escrita. Sem `-pipeline`, todas as rotas usam a linha das opções `-validate-arguments`, `-dlp`, `-inspect-results`, `-classifier` e `-mark-untrusted`.
+
+```bash
+./guarita -policy policies -catalog guarita.db \
+  -server web=http://127.0.0.1:9003/mcp -server mail=http://127.0.0.1:9004/mcp \
+  -pipeline web=injection,mark -pipeline mail=schema,dlp \
+  -allow-hosts lab.test
+```
+
+- As etapas são `schema` (exige `-catalog`), `dlp`, `injection`, `classifier` (exige `-classifier`) e `mark`, que precisa ser a última. Cada uma fica no seu sentido: `schema` e `dlp` na ida; as outras na volta.
+- `-pipeline etapa,…`, sem nome, vale para as rotas que não têm linha própria.
+- `-require-stages` recusa a partida de uma rota que não tenha as etapas listadas. Com `-require-stages dlp`, a configuração acima não sobe, porque a rota `web` não tem `dlp`: é a conferência que pega a lacuna antes de um vazamento.
+
 ## Ataques de laboratório
 
 O diretório [`attacks/`](attacks/README.md) reúne os ataques reproduzíveis, um pacote por ataque, cada um com o teste que o roda sem e com a defesa. Eles rodam com o resto da suíte em `go test ./...`; a medida do classificador só roda com um Ollama local.
