@@ -233,3 +233,19 @@ func TestPinCatalog_barraSombreamento(t *testing.T) {
 }
 
 // #endregion
+
+func TestPinCatalog_pinned(t *testing.T) {
+	ctx := context.Background()
+	catalog := NewPinCatalog(newMemoryStore(), "files")
+	_, _ = catalog.Review(ctx, []domain.ToolDefinition{
+		tool("read_file", "Lê."),
+	})
+	raw, err := catalog.Pinned(ctx, "read_file")
+	if err != nil || !strings.Contains(string(raw), "read_file") {
+		t.Fatalf("Pinned(read_file) = %s, %v", raw, err)
+	}
+	if _, err := catalog.Pinned(ctx, "send"); !errors.Is(err,
+		ErrNotInCatalog) {
+		t.Fatalf("Pinned(send) = %v", err)
+	}
+}

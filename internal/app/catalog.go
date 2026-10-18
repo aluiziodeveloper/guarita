@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -199,6 +200,22 @@ func (uc *PinCatalog) Check(ctx context.Context, tool string) error {
 		return ErrDefinitionChanged
 	}
 	return nil
+}
+
+// #endregion
+
+// #region app-catalog-pinned
+// Pinned devolve a definição fixada da ferramenta: a que o agente viu
+// em tools/list e a que a Guarita aceita. Fora do catálogo ou marcada,
+// não há definição para conferir.
+func (uc *PinCatalog) Pinned(
+	ctx context.Context, tool string,
+) (json.RawMessage, error) {
+	if err := uc.Check(ctx, tool); err != nil {
+		return nil, err
+	}
+	pin, _, err := uc.store.Pin(ctx, uc.server, tool)
+	return pin.Definition, err
 }
 
 // #endregion
