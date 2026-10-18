@@ -70,6 +70,7 @@ type Handler struct {
 	logger      *slog.Logger
 	agent       func(context.Context) string
 	catalog     ToolReviewer
+	results     ResultReviewer
 }
 
 // #region mcphttp-options
@@ -194,9 +195,7 @@ func (h *Handler) post(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := h.callContext(r.Context(), message.Method)
 	defer cancel()
-	if message.Method == "tools/list" {
-		ctx = context.WithValue(ctx, listToolsKey{}, true)
-	}
+	ctx = h.markRequest(ctx, message)
 	out := r.Clone(ctx) // o pedido recebido não é alterado
 	out.Body = io.NopCloser(bytes.NewReader(body))
 	out.ContentLength = int64(len(body))

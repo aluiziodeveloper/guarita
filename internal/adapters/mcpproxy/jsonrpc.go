@@ -248,3 +248,9 @@ func (message Message) Mirrored() Mirrored {
 }
 
 // #endregion
+
+// ToolCall é toolCall para os outros adaptadores: o transporte HTTP
+// precisa da chamada para revisar a resposta dela.
+func ToolCall(message Message) (domain.Call, bool, error) {
+	return toolCall(message)
+}

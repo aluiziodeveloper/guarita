@@ -81,6 +81,11 @@ func (h *Handler) rewriteFor(ctx context.Context) rewrite {
 			return filterMessage(ctx, h.catalog, data)
 		}
 	}
+	if call, ok := ctx.Value(toolCallKey{}).(domain.Call); ok {
+		return func(ctx context.Context, data []byte) ([]byte, error) {
+			return reviewMessage(ctx, h.results, call, data)
+		}
+	}
 	return nil
 }
 
