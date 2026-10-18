@@ -77,6 +77,7 @@ func DefaultActions() Actions {
 		SignalHiddenStyle:   domain.DecisionDeny,
 		SignalRoleLabel:     domain.DecisionAllow,
 		SignalHTMLComment:   domain.DecisionAllow,
+		SignalAltText:       domain.DecisionDeny,
 	}
 }
 
@@ -129,6 +130,12 @@ func detect(field, text string) []domain.Finding {
 		findings = append(findings, domain.Finding{
 			Field:  field,
 			Signal: SignalHidden, Detail: fmt.Sprintf("U+%04X", r),
+		})
+	}
+	if altText(text) {
+		findings = append(findings, domain.Finding{
+			Field:  field,
+			Signal: SignalAltText, Detail: "texto alternativo",
 		})
 	}
 	for _, group := range patterns {
