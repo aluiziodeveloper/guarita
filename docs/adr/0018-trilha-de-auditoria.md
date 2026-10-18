@@ -28,7 +28,7 @@ O registro da Guarita é feito com `log/slog` em JSON, e o registro ingênuo de 
 ## Consequências
 
 - No laboratório, a cadeia sozinha acusou cinco das sete adulterações (decisão trocada, hash de uma linha refeito, linha apagada, linhas trocadas e campo a mais); a cadeia refeita do meio e o fim cortado, só a cabeça.
-- Cada decisão espera o `fsync` do disco, e o tempo dele entra em cada chamada.
+- Cada decisão espera o `fsync` do disco, e o tempo dele entra em cada chamada: no laboratório, num ext4 de disco virtual do WSL 2, a mediana de cinco execuções foi de 426 µs por entrada. Como a trava ordena as gravações, a trilha é um ponto de serialização, e esse tempo limita as decisões por segundo da Guarita inteira.
 - A trilha fica na mesma máquina, com as permissões do usuário da Guarita.
 - A trilha diz que a chamada foi aprovada, mas não por qual operador.
 - O HMAC depende de o JSON dos argumentos chegar com as chaves na mesma ordem.
