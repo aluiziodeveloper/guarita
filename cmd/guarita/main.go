@@ -21,6 +21,7 @@ import (
 
 const usage = "uso: guarita [-allow ferramenta,… | -policy dir] -- " +
 	"<comando do servidor MCP> [argumentos]\n" +
+	"     guarita approvals [-admin URL] -secret arquivo list|approve|deny\n" +
 	"     guarita [-allow … | -policy dir] [-listen endereço] [-host …] " +
 	"[-origin …] [-server nome=URL …] " +
 	"-upstream <URL do servidor MCP>"
@@ -48,6 +49,9 @@ func run(
 	stdout io.WriteCloser,
 	stderr io.Writer,
 ) error {
+	if len(args) > 0 && args[0] == "approvals" { // o operador
+		return runApprovals(ctx, args[1:], stdout, stderr)
+	}
 	config, err := parseConfig(args, stderr)
 	if err != nil {
 		return err
@@ -57,7 +61,8 @@ func run(
 		return err
 	}
 	if len(config.servers) > 0 {
-		return serveHTTP(ctx, config, policy, stderr)
+		d := deciders{policy: policy, queue: newQueue(config.approval)}
+		return serveHTTP(ctx, config, d, stderr)
 	}
 	// Os dois transportes só usam Authorize: o repasse fica com eles.
 	gate := mcpproxy.NewGate(app.NewInterceptCall(policy, nil))
@@ -77,6 +82,7 @@ type config struct {
 	callTimeout time.Duration
 	auth        authConfig
 	catalogFile string            // modo HTTP: o catálogo em SQLite
+	approval    approvalConfig    // modo HTTP: a aprovação humana
 	credentials map[string]string // -server-credential, por namespace
 }
 
@@ -146,6 +152,7 @@ func httpFlags(
 		"recurso protegido (padrão: http://<escuta>/mcp)")
 	flags.StringVar(&c.auth.credentialFile, "upstream-credential", "",
 		"arquivo com a credencial da Guarita para o servidor")
+	approvalFlags(flags, &c.approval)
 	flags.StringVar(&c.catalogFile, "catalog", "",
 		"arquivo SQLite do catálogo de ferramentas")
 	return upstream, hosts, origins

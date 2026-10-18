@@ -157,6 +157,8 @@ No Capítulo 10, a referência é `cap10`; `desafio/cap10` traz os testes dos se
 
 No Capítulo 11, a referência é `cap11`; `desafio/cap11` traz os testes da regra de `send_email` e `cap11-desafio`, a solução.
 
+No Capítulo 12, a referência é `cap12`; `desafio/cap12` traz os testes da aprovação por dois operadores e `cap12-desafio`, a solução.
+
 ## Proxy stdio
 
 A partir do Capítulo 5, a Guarita fica entre o agente e um servidor MCP que fala pelo transporte stdio. Configure o agente para executar a Guarita no lugar do servidor, com o comando do servidor depois de `--`:
@@ -259,6 +261,24 @@ A política recebe como `input` o agente (o `sub` do *token*), o servidor (o nam
 ```bash
 go run github.com/open-policy-agent/opa@v1.21.1 test -v policies
 ```
+
+## Aprovação humana
+
+A partir do Capítulo 12, uma chamada para a qual a política responde `require_approval` espera a decisão de um operador. A aprovação liga com `-operators`, um arquivo com uma linha `nome segredo` por operador (segredo com pelo menos 16 caracteres, arquivo sem leitura para outros usuários):
+
+```bash
+./guarita -policy policies -agent-key agent.pub -agent-issuer https://auth.lab.test \
+  -server db=http://127.0.0.1:9002/mcp -operators operators -admin-listen 127.0.0.1:8081
+```
+
+A interface do operador fica noutra escuta, só em loopback: `http://127.0.0.1:8081/` no navegador (Basic, com o nome e o segredo) ou pela linha de comando:
+
+```bash
+./guarita approvals -admin http://127.0.0.1:8081 -secret ana.secret list
+./guarita approvals -admin http://127.0.0.1:8081 -secret ana.secret approve <ID>
+```
+
+Cada pedido expira em `-approval-timeout` (2 min). Cada agente tem no máximo `-approval-max-pending` pedidos pendentes (3), e a mesma chamada negada por um operador é negada na hora por `-approval-cooldown` (10 min). O agente não decide o próprio pedido, e uma decisão não se repete.
 
 ## Ataques de laboratório
 
