@@ -280,6 +280,17 @@ A interface do operador fica noutra escuta, só em loopback: `http://127.0.0.1:8
 
 Cada pedido expira em `-approval-timeout` (2 min). Cada agente tem no máximo `-approval-max-pending` pedidos pendentes (3), e a mesma chamada negada por um operador é negada na hora por `-approval-cooldown` (10 min). O agente não decide o próprio pedido, e uma decisão não se repete.
 
+## Revisão das respostas
+
+A partir do Capítulo 14, a Guarita pode ler o resultado de cada `tools/call` antes de ele chegar ao agente, em JSON ou em SSE, no modo HTTP:
+
+```bash
+./guarita -policy policies -server web=http://127.0.0.1:9003/mcp -inspect-results -mark-untrusted
+```
+
+- `-inspect-results` barra o resultado com caracteres invisíveis, delimitadores de modelos de conversa (`[INST]`, `<<SYS>>`, `<|im_start|>`) ou estilos que escondem texto (`display:none`, `visibility:hidden`, `font-size:0`). Rótulos de papel (`SYSTEM:`, `<system>`) e comentários HTML só vão para o registro: barrá-los barraria um terço das respostas legítimas do corpus de teste. O resultado barrado chega ao agente como erro de ferramenta, com `isError`.
+- `-mark-untrusted` envolve o texto de cada resultado entre delimitadores com o servidor, a ferramenta e um identificador sorteado a cada resposta.
+
 ## Ataques de laboratório
 
 O diretório [`attacks/`](attacks/README.md) reúne os ataques reproduzíveis, um pacote por ataque, cada um com o teste que o roda sem e com a defesa. Eles rodam com o resto da suíte em `go test ./...`.

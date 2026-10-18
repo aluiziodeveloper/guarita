@@ -252,10 +252,13 @@ func newHandler(
 		options = append(options, mcphttp.WithCatalog(catalog))
 	}
 	useCase = append(useCase, inspectors(c.inspect, catalog, logger)...)
+	useCase = append(useCase, resultOptions(c.inspect)...)
 	useCase = append(useCase, d.options()...) // a fila, se houver
-	gate := mcpproxy.NewGate(app.NewInterceptCall(d.policy, nil,
-		useCase...))
-	return mcphttp.NewHandler(upstream, gate, options...)
+	uc := app.NewInterceptCall(d.policy, nil, useCase...)
+	if c.inspect.results || c.inspect.mark { // o caminho de volta
+		options = append(options, mcphttp.WithResults(uc))
+	}
+	return mcphttp.NewHandler(upstream, mcpproxy.NewGate(uc), options...)
 }
 
 // newGuard aceita os hosts de -host ou, sem eles, os do loopback.

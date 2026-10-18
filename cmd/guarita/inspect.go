@@ -5,7 +5,9 @@ import (
 	"log/slog"
 
 	"github.com/aluiziodeveloper/guarita/internal/adapters/dlp"
+	"github.com/aluiziodeveloper/guarita/internal/adapters/injection"
 	"github.com/aluiziodeveloper/guarita/internal/adapters/schema"
+	"github.com/aluiziodeveloper/guarita/internal/adapters/untrusted"
 	"github.com/aluiziodeveloper/guarita/internal/app"
 	"github.com/aluiziodeveloper/guarita/internal/domain"
 )
@@ -16,6 +18,8 @@ type inspectConfig struct {
 	entropy    float64
 	hosts      string // separados por vírgula; vazio não confere destinos
 	validation bool   // argumentos contra o inputSchema; exige -catalog
+	results    bool   // revisa os resultados de tools/call
+	mark       bool   // marca os resultados como não confiáveis
 }
 
 // inspectFlags declara as opções dos inspetores.
@@ -28,7 +32,29 @@ func inspectFlags(flags *flag.FlagSet, c *inspectConfig) {
 		"hosts permitidos nas URLs dos argumentos (.dominio vale subdomínios)")
 	flags.BoolVar(&c.validation, "validate-arguments", false,
 		"valida os argumentos contra o inputSchema fixado no catálogo")
+	flags.BoolVar(&c.results, "inspect-results", false,
+		"barra resultados com texto oculto ou delimitadores de conversa")
+	flags.BoolVar(&c.mark, "mark-untrusted", false,
+		"marca o texto dos resultados como conteúdo não confiável")
 }
+
+// #region cmd-guarita-result-options
+// resultOptions monta a revisão do caminho de volta. Ela só existe se
+// alguma das duas opções estiver ligada: sem elas, a Guarita nem lê as
+// respostas de tools/call.
+func resultOptions(c inspectConfig) []app.Option {
+	var options []app.Option
+	if c.results {
+		options = append(options, app.WithResultInspectors(
+			injection.New(injection.DefaultActions())))
+	}
+	if c.mark {
+		options = append(options, app.WithResultMarker(untrusted.New()))
+	}
+	return options
+}
+
+// #endregion
 
 // #region cmd-guarita-inspectors
 // inspectors monta os inspetores de uma rota. O esquema vem antes: é a
