@@ -91,6 +91,7 @@ type InterceptCall struct {
 	catalog  ToolCatalog
 	server   string
 	agent    func(context.Context) string
+	approver Approver
 }
 
 // NewInterceptCall recebe as portas de que o caso de uso precisa. As
@@ -144,7 +145,7 @@ func (uc *InterceptCall) Authorize(
 	case domain.DecisionAllow:
 		return nil
 	case domain.DecisionRequireApproval:
-		return ErrApprovalRequired
+		return uc.approve(ctx, call)
 	case domain.DecisionDeny:
 		return ErrPolicyDenied
 	}
@@ -157,13 +158,20 @@ func (uc *InterceptCall) Authorize(
 func (uc *InterceptCall) evaluate(
 	ctx context.Context, call domain.Call,
 ) (domain.Decision, error) {
-	decision, err := uc.policy.Evaluate(ctx, domain.PolicyInput{
-		Agent: uc.agent(ctx), Server: uc.server, Call: call,
-	})
+	decision, err := uc.policy.Evaluate(ctx, uc.input(ctx, call))
 	if err == nil {
 		err = decision.Validate()
 	}
 	return decision, err
+}
+
+// input é o que a política e o aprovador recebem sobre a chamada.
+func (uc *InterceptCall) input(
+	ctx context.Context, call domain.Call,
+) domain.PolicyInput {
+	return domain.PolicyInput{
+		Agent: uc.agent(ctx), Server: uc.server, Call: call,
+	}
 }
 
 func (uc *InterceptCall) forward(
