@@ -41,19 +41,30 @@ type Request struct {
 type entry struct {
 	request Request
 	done    chan struct{}
+	key     string // a chamada, para a repetição depois de negada
 }
 
 // Queue é a fila. O mutex protege o mapa e o estado de cada pedido;
 // a espera acontece fora dele.
 type Queue struct {
-	mu      sync.Mutex
-	entries map[string]*entry
-	timeout time.Duration
+	mu         sync.Mutex
+	entries    map[string]*entry
+	timeout    time.Duration
+	maxPending int                  // por agente; 0 é sem limite
+	cooldown   time.Duration        // 0 desliga
+	denied     map[string]time.Time // chave da chamada -> até quando
 }
 
 // New cria a fila com o prazo de cada pedido.
-func New(timeout time.Duration) *Queue {
-	return &Queue{entries: map[string]*entry{}, timeout: timeout}
+func New(timeout time.Duration, options ...Option) *Queue {
+	q := &Queue{
+		entries: map[string]*entry{}, timeout: timeout,
+		denied: map[string]time.Time{},
+	}
+	for _, option := range options {
+		option(q)
+	}
+	return q
 }
 
 // #region approval-await
@@ -62,7 +73,10 @@ func New(timeout time.Duration) *Queue {
 func (q *Queue) Await(
 	ctx context.Context, input domain.PolicyInput,
 ) (domain.ApprovalState, error) {
-	e := q.add(input)
+	e, err := q.add(input)
+	if err != nil {
+		return "", err
+	}
 	timer := time.NewTimer(q.timeout)
 	defer timer.Stop()
 	select {
@@ -82,16 +96,20 @@ func (q *Queue) Await(
 // #region approval-add
 // add registra o pedido com um identificador aleatório: rand.Text dá
 // 26 caracteres de base32, mais de 128 bits, que ninguém adivinha.
-func (q *Queue) add(input domain.PolicyInput) *entry {
+func (q *Queue) add(input domain.PolicyInput) (*entry, error) {
+	key := callKey(input)
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if err := q.admit(input, key); err != nil {
+		return nil, err
+	}
 	now := time.Now()
-	e := &entry{done: make(chan struct{}), request: Request{
+	e := &entry{done: make(chan struct{}), key: key, request: Request{
 		ID: rand.Text(), Input: input, State: domain.ApprovalPending,
 		Created: now, Deadline: now.Add(q.timeout),
 	}}
-	q.mu.Lock()
-	defer q.mu.Unlock()
 	q.entries[e.request.ID] = e
-	return e
+	return e, nil
 }
 
 // #endregion
@@ -110,6 +128,9 @@ func (q *Queue) finish(
 		return err
 	}
 	e.request.State, e.request.DecidedBy = next, by
+	if next == domain.ApprovalDenied && q.cooldown > 0 {
+		q.denied[e.key] = time.Now().Add(q.cooldown)
+	}
 	close(e.done)
 	return nil
 }
