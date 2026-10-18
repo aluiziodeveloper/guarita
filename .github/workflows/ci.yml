@@ -121,3 +121,64 @@ jobs:
       - name: Run opa test
         run: go run "$OPA" test -v policies
   # #endregion
+
+  vulncheck:
+    name: Vulnerability check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.x"
+          check-latest: true
+          cache: true
+
+      # #region ci-vulncheck
+      # Falha se o código alcança uma vulnerabilidade conhecida, da
+      # biblioteca padrão ou de um módulo; as que ele não chama ficam no
+      # relatório, sem falhar.
+      - name: Run govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+      # #endregion
+
+  release:
+    name: Reproducible release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.x"
+          check-latest: true
+          cache: true
+
+      # #region ci-release
+      - name: Install release tools
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          GOBIN="$RUNNER_TEMP/tools" go install \
+            github.com/goreleaser/goreleaser/v2@v2.18.3
+          GOBIN="$RUNNER_TEMP/tools" go install \
+            github.com/anchore/syft/cmd/syft@v1.54.1
+
+      # Os módulos ficam no cache antes: a release roda sem rede.
+      - name: Download modules
+        run: go mod download
+
+      - name: Check GoReleaser configuration
+        run: '"$RUNNER_TEMP/tools/goreleaser" check'
+
+      # O mesmo commit em dois caminhos: binários e pacotes iguais, ou a
+      # CI falha.
+      - name: Build the release twice and compare
+        run: TOOLS="$RUNNER_TEMP/tools" sh deploy/release/reproduce.sh
+      # #endregion
