@@ -141,3 +141,45 @@ func certificate(t *testing.T) (cert, key string, pool *x509.CertPool) {
 	pool.AddCert(parsed)
 	return cert, key, pool
 }
+
+// #region cmd-guarita-public-resource-test
+// Atrás de um nome público, numa rota nomeada, o recurso protegido que
+// os metadados anunciam é o do nome de -host, com https.
+func TestRun_recursoPeloNomePublico(t *testing.T) {
+	cert, key, pool := certificate(t)
+	pub, _, _ := labFiles(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	endpoint, _ := startHTTP(t, ctx, "-listen", loopback,
+		"-host", "guarita.lab:8443", "-agent-key", pub,
+		"-agent-issuer", labIssuer,
+		"-tls-cert", cert, "-tls-key", key,
+		"-server", "files="+echoUpstream(t))
+	base, _, _ := strings.Cut(endpoint, "/mcp")
+	req, _ := http.NewRequest("GET", base+
+		"/.well-known/oauth-protected-resource/mcp/files", nil)
+	req.Host = "guarita.lab:8443"
+	body := tlsGet(t, pool, req)
+	t.Logf("%s", body)
+	want := `"resource":"https://guarita.lab:8443/mcp/files"`
+	if !strings.Contains(body, want) {
+		t.Errorf("quer %s", want)
+	}
+}
+
+// #endregion
+
+// tlsGet faz o pedido confiando só em pool e devolve o corpo.
+func tlsGet(t *testing.T, pool *x509.CertPool, req *http.Request) string {
+	t.Helper()
+	client := &http.Client{Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{RootCAs: pool},
+	}}
+	res, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	body, _ := io.ReadAll(res.Body)
+	return string(body)
+}

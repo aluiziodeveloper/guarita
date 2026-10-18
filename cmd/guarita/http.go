@@ -189,13 +189,15 @@ func newEndpoint(
 
 // #region cmd-guarita-new-route
 // newRoute monta um servidor: o recurso protegido é o caminho dele, e
-// um token emitido para outro servidor da Guarita não serve aqui.
+// um token emitido para outro servidor da Guarita não serve aqui. Com
+// -host, o recurso usa o nome público, e não o endereço da escuta.
 func newRoute(
 	c config, server upstreamServer, d deciders,
 	store app.CatalogStore, addr string, logger *slog.Logger,
 ) (http.Handler, http.Handler, error) {
-	resource := c.scheme() + "://" + addr + server.path()
-	metadataURL := c.scheme() + "://" + addr + identity.MetadataPath
+	base := c.scheme() + "://" + cmp.Or(first(c.hosts), addr)
+	resource := base + server.path()
+	metadataURL := base + identity.MetadataPath
 	if server.name == "" {
 		resource = cmp.Or(c.auth.resource, resource)
 	} else {
@@ -255,6 +257,14 @@ func loadVerifier(auth authConfig, resource string) (
 		return nil, err
 	}
 	return identity.NewVerifier(key, auth.issuer, resource)
+}
+
+// first é o primeiro item, ou vazio.
+func first(items []string) string {
+	if len(items) == 0 {
+		return ""
+	}
+	return items[0]
 }
 
 // passThrough é o middleware que não faz nada, para o loopback sem
