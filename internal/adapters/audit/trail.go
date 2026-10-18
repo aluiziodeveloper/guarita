@@ -102,7 +102,13 @@ func (t *Trail) Record(
 // possibilidades, e quem tivesse a trilha descobriria o valor testando
 // todas.
 func (t *Trail) mac(arguments json.RawMessage) string {
-	if len(t.key) == 0 || len(arguments) == 0 {
+	return MAC(t.key, arguments)
+}
+
+// MAC é o HMAC da trilha para os argumentos dados: é com ele que quem
+// investiga confere se um argumento suspeito foi o da chamada.
+func MAC(key []byte, arguments json.RawMessage) string {
+	if len(key) == 0 || len(arguments) == 0 {
 		return ""
 	}
 	var compact bytes.Buffer
@@ -110,7 +116,7 @@ func (t *Trail) mac(arguments json.RawMessage) string {
 		compact.Reset()
 		compact.Write(arguments)
 	}
-	h := hmac.New(sha256.New, t.key)
+	h := hmac.New(sha256.New, key)
 	h.Write(compact.Bytes())
 	return hex.EncodeToString(h.Sum(nil))
 }
