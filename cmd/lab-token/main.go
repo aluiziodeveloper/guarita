@@ -1,6 +1,7 @@
 // Comando lab-token faz o papel do servidor de autorização no
 // laboratório do Capítulo 8: gera o par de chaves Ed25519 do emissor e
-// emite tokens JWT para o agente. Não é para produção.
+// emite tokens JWT para o agente. Desde o Capítulo 21, também gera o
+// certificado TLS da Guarita no laboratório. Não é para produção.
 package main
 
 import (
@@ -20,6 +21,7 @@ import (
 )
 
 var errUsage = errors.New("uso: lab-token -genkey -out dir | " +
+	"lab-token -cert host -out dir | " +
 	"lab-token -key arquivo -iss emissor -aud recurso -sub agente")
 
 func main() {
@@ -31,6 +33,7 @@ func main() {
 func run(args []string, stdout io.Writer) error {
 	flags := flag.NewFlagSet("lab-token", flag.ContinueOnError)
 	genkey := flags.Bool("genkey", false, "gera agent.key e agent.pub")
+	cert := flags.String("cert", "", "gera tls.crt e tls.key para o host")
 	out := flags.String("out", ".", "diretório das chaves geradas")
 	keyFile := flags.String("key", "", "chave privada do emissor (PEM)")
 	issuer := flags.String("iss", "", "emissor")
@@ -42,6 +45,9 @@ func run(args []string, stdout io.Writer) error {
 	}
 	if *genkey {
 		return generate(*out)
+	}
+	if *cert != "" {
+		return certificate(*out, *cert)
 	}
 	if *keyFile == "" || *issuer == "" || *audience == "" || *subject == "" {
 		return errUsage

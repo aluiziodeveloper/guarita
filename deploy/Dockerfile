@@ -18,11 +18,14 @@ RUN go build -trimpath -ldflags="-s -w" \
     && go build -trimpath -ldflags="-s -w" \
       -o /out/lab-mcp ./cmd/lab-poisoned-mcp \
     && go build -trimpath -ldflags="-s -w" \
-      -o /out/lab-files ./cmd/lab-files-mcp
+      -o /out/lab-files ./cmd/lab-files-mcp \
+    && go build -trimpath -ldflags="-s -w" \
+      -o /out/lab-load ./cmd/lab-load
 
 FROM ${RUN_IMAGE}
 
 COPY --from=build /out/lab-agent /lab-agent
 COPY --from=build /out/lab-mcp /lab-mcp
 COPY --from=build /out/lab-files /lab-files
+COPY --from=build /out/lab-load /lab-load
 # #endregion

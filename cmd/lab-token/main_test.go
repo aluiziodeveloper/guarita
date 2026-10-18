@@ -2,6 +2,9 @@ package main
 
 import (
 	"bytes"
+	"crypto/x509"
+	"encoding/pem"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,5 +43,27 @@ func TestRun_geraChavesEEmiteToken(t *testing.T) {
 		nil)
 	if err != nil || info2.UserID != "agente-1" {
 		t.Fatalf("Verify() = %v, %v", info2, err)
+	}
+}
+
+// O certificado do laboratório vale para o host e para o loopback, e a
+// chave nasce só do dono.
+func TestCertificate(t *testing.T) {
+	dir := t.TempDir()
+	if err := run([]string{"-cert", "guarita.lab", "-out", dir},
+		io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(filepath.Join(dir, "tls.crt"))
+	block, _ := pem.Decode(data)
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, _ := os.Stat(filepath.Join(dir, "tls.key"))
+	if cert.VerifyHostname("guarita.lab") != nil ||
+		cert.VerifyHostname("127.0.0.1") != nil ||
+		info.Mode().Perm() != 0o600 {
+		t.Errorf("%v %v %v", cert.DNSNames, cert.IPAddresses, info.Mode())
 	}
 }
