@@ -33,9 +33,10 @@ type Actions map[string]domain.Decision
 // DefaultActions são as decisões do laboratório.
 func DefaultActions() Actions {
 	return Actions{
-		SignalSecret:  domain.DecisionDeny,
-		SignalCPF:     domain.DecisionRequireApproval,
-		SignalEntropy: domain.DecisionRequireApproval,
+		SignalSecret:      domain.DecisionDeny,
+		SignalCPF:         domain.DecisionRequireApproval,
+		SignalEntropy:     domain.DecisionRequireApproval,
+		SignalDestination: domain.DecisionDeny,
 	}
 }
 
@@ -45,12 +46,17 @@ func DefaultActions() Actions {
 type Inspector struct {
 	actions    Actions
 	minEntropy float64
+	hosts      []string // nil: destinos não conferidos
 }
 
 // New cria o inspetor. minEntropy é o limiar, em bits por caractere,
 // para um token de 24 caracteres ou mais ser tratado como segredo.
-func New(actions Actions, minEntropy float64) *Inspector {
-	return &Inspector{actions: actions, minEntropy: minEntropy}
+func New(actions Actions, minEntropy float64, options ...Option) *Inspector {
+	i := &Inspector{actions: actions, minEntropy: minEntropy}
+	for _, option := range options {
+		option(i)
+	}
+	return i
 }
 
 // #region dlp-inspect
@@ -92,6 +98,7 @@ func (i *Inspector) action(signal string) domain.Decision {
 // nunca o valor.
 func (i *Inspector) detect(field, text string) []domain.Finding {
 	findings := direct(field, text)
+	findings = append(findings, i.destination(field, text)...)
 	for _, candidate := range token.FindAllString(text, -1) {
 		if plain, ok := decoded(candidate); ok {
 			inner := direct(field+" (base64)", plain)
