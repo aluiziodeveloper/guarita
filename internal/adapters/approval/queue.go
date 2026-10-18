@@ -34,6 +34,7 @@ type Request struct {
 	Created   time.Time
 	Deadline  time.Time
 	DecidedBy string
+	Signers   []string // quem já aprovou, quando há quórum
 }
 
 // entry é um pedido e o sinal de que ele saiu de pending: o canal é
@@ -53,6 +54,7 @@ type Queue struct {
 	maxPending int                  // por agente; 0 é sem limite
 	cooldown   time.Duration        // 0 desliga
 	denied     map[string]time.Time // chave da chamada -> até quando
+	quorum     map[string]int       // ferramenta -> operadores
 }
 
 // New cria a fila com o prazo de cada pedido.
@@ -155,6 +157,10 @@ func (q *Queue) Decide(id, operator string, approve bool) error {
 	to := domain.ApprovalDenied
 	if approve {
 		to = domain.ApprovalApproved
+		complete, err := q.sign(e, operator)
+		if err != nil || !complete {
+			return err // falta assinatura: o pedido segue pendente
+		}
 	}
 	return q.finish(e, to, operator)
 }
