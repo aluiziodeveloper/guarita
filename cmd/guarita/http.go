@@ -257,12 +257,16 @@ func newHandler(
 		useCase = append(useCase, app.WithCatalog(catalog))
 		options = append(options, mcphttp.WithCatalog(catalog))
 	}
-	useCase = append(useCase, inspectors(c.inspect, catalog, logger)...)
-	useCase = append(useCase,
-		resultOptions(c.inspect, d.classifier)...)
+	line, err := registry(c.inspect, catalog, d.classifier).Build(
+		defaultStages(c.inspect, catalog != nil))
+	if err != nil {
+		return nil, err
+	}
+	useCase = append(useCase, line.Options()...)
+	useCase = append(useCase, app.WithFindings(logFindings(logger)))
 	useCase = append(useCase, d.options()...) // a fila, se houver
 	uc := app.NewInterceptCall(d.policy, nil, useCase...)
-	if c.inspect.results || c.inspect.mark || d.classifier != nil {
+	if line.ReadsResults() { // o caminho de volta
 		options = append(options, mcphttp.WithResults(uc))
 	}
 	return mcphttp.NewHandler(upstream, mcpproxy.NewGate(uc), options...)
