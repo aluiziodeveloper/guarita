@@ -291,9 +291,25 @@ A partir do Capítulo 14, a Guarita pode ler o resultado de cada `tools/call` an
 - `-inspect-results` barra o resultado com caracteres invisíveis, delimitadores de modelos de conversa (`[INST]`, `<<SYS>>`, `<|im_start|>`) ou estilos que escondem texto (`display:none`, `visibility:hidden`, `font-size:0`). Rótulos de papel (`SYSTEM:`, `<system>`) e comentários HTML só vão para o registro: barrá-los barraria um terço das respostas legítimas do corpus de teste. O resultado barrado chega ao agente como erro de ferramenta, com `isError`.
 - `-mark-untrusted` envolve o texto de cada resultado entre delimitadores com o servidor, a ferramenta e um identificador sorteado a cada resposta.
 
+## Classificador local
+
+A partir do Capítulo 15, um modelo local no [Ollama](https://ollama.com) pode julgar o texto de cada resultado, depois das regras de `-inspect-results`:
+
+```bash
+docker run -d --name guarita-ollama -p 127.0.0.1:11434:11434 \
+  -v guarita-ollama:/root/.ollama ollama/ollama:0.35.1
+docker exec guarita-ollama ollama pull qwen2.5:7b
+./guarita -policy policies -server web=http://127.0.0.1:9003/mcp \
+  -inspect-results -classifier http://127.0.0.1:11434
+```
+
+- `-classifier-model` (padrão `qwen2.5:7b`) e `-classifier-threshold` (padrão 0,8) andam juntos: o limiar foi medido para esse modelo, no conjunto de referência de [`attacks/classifier`](attacks/classifier); outro modelo pede outra medida.
+- `-classifier-timeout` (padrão 5 s) é o prazo de cada resultado. Na partida, a Guarita confere que o modelo está instalado e o aquece.
+- `-classifier-on-error` decide o que acontece com o modelo fora do ar ou lento: `deny` (padrão) barra o resultado; `rules` deixa a decisão com as regras de `-inspect-results` e registra a falha.
+
 ## Ataques de laboratório
 
-O diretório [`attacks/`](attacks/README.md) reúne os ataques reproduzíveis, um pacote por ataque, cada um com o teste que o roda sem e com a defesa. Eles rodam com o resto da suíte em `go test ./...`.
+O diretório [`attacks/`](attacks/README.md) reúne os ataques reproduzíveis, um pacote por ataque, cada um com o teste que o roda sem e com a defesa. Eles rodam com o resto da suíte em `go test ./...`; a medida do classificador só roda com um Ollama local.
 
 ## Arquitetura e regra de imports
 
