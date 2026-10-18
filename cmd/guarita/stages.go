@@ -22,6 +22,7 @@ const (
 	stageInjection  = "injection"
 	stageClassifier = "classifier"
 	stageMark       = "mark"
+	stageDecoded    = "decoded"
 )
 
 var (
@@ -53,6 +54,10 @@ func registry(
 				return pipeline.Stage{Result: classifier}
 			}),
 		stageMark: always(pipeline.Stage{Marker: untrusted.New()}),
+		stageDecoded: always(pipeline.Stage{
+			Result: injection.NewDecoded(
+				injection.New(injection.DefaultActions())),
+		}),
 	}
 }
 
