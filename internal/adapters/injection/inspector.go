@@ -40,24 +40,47 @@ var must = regexp.MustCompile
 // os rótulos, os que imitam quem fala numa conversa.
 var patterns = []struct {
 	signal string
-	forms  []*regexp.Regexp
+	forms  []form
 }{
-	{SignalChatDelimiter, []*regexp.Regexp{
-		must(`\[/?(?:INST|SYS)\]|<</?SYS>>|<\|im_(?:start|end)\|>`),
-	}},
-	{SignalHiddenStyle, []*regexp.Regexp{must(`(?i)style\s*=\s*` +
+	{SignalChatDelimiter, []form{{must(`\[/?(?:INST|SYS)\]|` +
+		`<</?SYS>>|<\|im_(?:start|end)\|>`), []string{"[", "<"}}}},
+	{SignalHiddenStyle, []form{{must(`(?i)style\s*=\s*` +
 		`["'][^"']*(?:display\s*:\s*none|visibility\s*:\s*hidden|` +
-		`font-size\s*:\s*0)`)}},
-	{SignalRoleLabel, []*regexp.Regexp{
-		must(`(?im)^\s*(?:system|sistema|assistant|assistente|` +
-			`developer)\s*:`),
-		must(`(?i)<\s*/?\s*(?:system|assistant|developer|` +
-			`instructions?)\b[^>]*>`),
-		must(`(?im)^\s*#{2,}\s*(?:system|instructions?)\b`),
+		`font-size\s*:\s*0)`), []string{"="}}}},
+	{SignalRoleLabel, []form{
+		{must(`(?im)^\s*(?:system|sistema|assistant|assistente|` +
+			`developer)\s*:`), []string{":"}},
+		{must(`(?i)<\s*/?\s*(?:system|assistant|developer|` +
+			`instructions?)\b[^>]*>`), []string{"<"}},
+		{
+			must(`(?im)^\s*#{2,}\s*(?:system|instructions?)\b`),
+			[]string{"##"},
+		},
 	}},
-	{SignalHTMLComment, []*regexp.Regexp{
-		must(`<!--[\s\S]*?\pL[\s\S]*?-->`),
+	{SignalHTMLComment, []form{
+		{must(`<!--[\s\S]*?\pL[\s\S]*?-->`), []string{"<!--"}},
 	}},
+}
+
+// #endregion
+
+// #region injection-form
+// form é uma expressão e os trechos sem os quais ela não casa: todo
+// casamento dela contém um deles. strings.Contains é muito mais barato
+// que a expressão, e um texto sem nenhum deles é descartado antes dela.
+// O teste de fuzzing confere que o descarte nunca muda a resposta.
+type form struct {
+	re    *regexp.Regexp
+	needs []string
+}
+
+func (f form) match(text string) bool {
+	for _, need := range f.needs {
+		if strings.Contains(text, need) {
+			return f.re.MatchString(text)
+		}
+	}
+	return false
 }
 
 // #endregion
@@ -133,7 +156,7 @@ func detect(field, text string) []domain.Finding {
 	}
 	for _, group := range patterns {
 		for n, form := range group.forms {
-			if form.MatchString(text) {
+			if form.match(text) {
 				findings = append(findings, domain.Finding{
 					Field: field, Signal: group.signal,
 					Detail: fmt.Sprintf("forma %d", n+1),
