@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"time"
+
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/aluiziodeveloper/guarita/internal/adapters/admin"
 	"github.com/aluiziodeveloper/guarita/internal/adapters/approval"
@@ -40,12 +43,50 @@ func approvalFlags(flags *flag.FlagSet, c *approvalConfig) {
 
 // deciders são os que decidem: a política e, quando ela pede
 // aprovação, uma pessoa, pela fila; no caminho de volta, o
-// classificador.
+// classificador; e os que registram, a trilha e o tracer.
 type deciders struct {
 	policy     app.PolicyEvaluator
 	queue      *approval.Queue     // nil sem -operators
 	classifier app.ResultInspector // nil sem -classifier
 	quota      app.Inspector       // nil sem -quota nem -budget
+	auditor    app.Auditor         // nil sem -audit
+	tracer     trace.Tracer        // nil sem -trace-file
+}
+
+// #region cmd-guarita-new-deciders
+// newDeciders monta o que vale para todas as rotas e os dois modos: a
+// política, a fila, a trilha e o tracer. closeAll fecha a trilha e
+// descarrega os spans, na ordem inversa da abertura.
+func newDeciders(
+	ctx context.Context, c config,
+) (deciders, func(), error) {
+	policy, err := newPolicy(ctx, c)
+	if err != nil {
+		return deciders{}, nil, err
+	}
+	auditor, closeAudit, err := c.audit.openAudit()
+	if err != nil {
+		return deciders{}, nil, err
+	}
+	tracer, closeTracer, err := c.audit.tracer()
+	if err != nil {
+		_ = closeAudit()
+		return deciders{}, nil, err
+	}
+	return deciders{
+		policy: policy, queue: newQueue(c.approval),
+		auditor: auditor, tracer: tracer,
+	}, func() { _, _ = closeTracer(), closeAudit() }, nil
+}
+
+// #endregion
+
+// audited devolve a opção da trilha, se houver uma.
+func (d deciders) audited() []app.Option {
+	if d.auditor == nil {
+		return nil
+	}
+	return []app.Option{app.WithAuditor(d.auditor)}
 }
 
 // options devolve a opção do aprovador, se houver fila.

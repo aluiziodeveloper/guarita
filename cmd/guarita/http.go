@@ -36,7 +36,7 @@ func serveHTTP(
 	ctx context.Context, c config, d deciders,
 	stderr io.Writer,
 ) error {
-	logger := slog.New(slog.NewJSONHandler(stderr, nil))
+	logger := newLogger(stderr)
 	store, closeStore, err := openStore(ctx, c, logger)
 	if err != nil {
 		return err
@@ -241,6 +241,9 @@ func newHandler(
 		mcphttp.WithLogger(logger),
 		mcphttp.WithAgent(identity.Subject),
 	}
+	if d.tracer != nil {
+		options = append(options, mcphttp.WithTracer(d.tracer))
+	}
 	if rt := c.limits.transport(server.name, logger); rt != nil {
 		options = append(options, mcphttp.WithTransport(rt))
 	}
@@ -270,6 +273,7 @@ func newHandler(
 	useCase = append(useCase, line.Options()...)
 	useCase = append(useCase, app.WithFindings(logFindings(logger)))
 	useCase = append(useCase, d.options()...) // a fila, se houver
+	useCase = append(useCase, d.audited()...) // a trilha, se houver
 	uc := app.NewInterceptCall(d.policy, nil, useCase...)
 	if line.ReadsResults() { // o caminho de volta
 		options = append(options, mcphttp.WithResults(uc))

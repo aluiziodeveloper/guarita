@@ -16,13 +16,14 @@ var (
 		"-sandbox is for a stdio server, after --; HTTP servers are remote")
 )
 
-// defenseFlags declara as opções das defesas dos Capítulos 12 a 18: a
-// aprovação, os inspetores, a sandbox e os limites.
+// defenseFlags declara as opções das defesas dos Capítulos 12 a 19: a
+// aprovação, os inspetores, a sandbox, os limites e a auditoria.
 func defenseFlags(flags *flag.FlagSet, c *config) {
 	approvalFlags(flags, &c.approval)
 	inspectFlags(flags, &c.inspect)
 	sandboxFlags(flags, &c.sandbox)
 	limitsFlags(flags, &c.limits)
+	auditFlags(flags, &c.audit)
 }
 
 // sandboxConfig põe o servidor stdio num contêiner.

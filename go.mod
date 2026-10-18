@@ -9,6 +9,7 @@ require (
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/open-policy-agent/opa v1.21.1
 	go.opentelemetry.io/otel v1.47.0
+	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.47.0
 	go.opentelemetry.io/otel/sdk v1.47.0
 	go.opentelemetry.io/otel/trace v1.47.0
 	golang.org/x/sync v0.23.0

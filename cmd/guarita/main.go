@@ -49,27 +49,46 @@ func run(
 	stdout io.WriteCloser,
 	stderr io.Writer,
 ) error {
-	if len(args) > 0 && args[0] == "approvals" { // o operador
-		return runApprovals(ctx, args[1:], stdout, stderr)
+	if sub, ok := subcommand(args); ok { // o operador e a investigação
+		return sub(ctx, args[1:], stdout, stderr)
 	}
 	config, err := parseConfig(args, stderr)
 	if err != nil {
 		return err
 	}
-	policy, err := newPolicy(ctx, config)
+	d, closeAll, err := newDeciders(ctx, config)
 	if err != nil {
 		return err
 	}
+	defer closeAll()
 	if len(config.servers) > 0 {
-		d := deciders{policy: policy, queue: newQueue(config.approval)}
 		return serveHTTP(ctx, config, d, stderr)
 	}
 	// Os dois transportes só usam Authorize: o repasse fica com eles.
-	gate := mcpproxy.NewGate(app.NewInterceptCall(policy, nil))
+	gate := mcpproxy.NewGate(app.NewInterceptCall(d.policy, nil,
+		d.audited()...))
 	return serveStdio(ctx, config.stdio(), gate, stdin, stdout, stderr)
 }
 
 // #endregion
+
+// subcommand escolhe o subcomando de args[0], se houver um.
+func subcommand(args []string) (
+	func(context.Context, []string, io.Writer, io.Writer) error, bool,
+) {
+	if len(args) == 0 {
+		return nil, false
+	}
+	switch args[0] {
+	case "approvals":
+		return runApprovals, true
+	case "audit":
+		return func(_ context.Context, a []string, out, e io.Writer) error {
+			return runAudit(a, out, e)
+		}, true
+	}
+	return nil, false
+}
 
 type config struct {
 	allow       []string         // -allow: a lista do Capítulo 4
@@ -87,6 +106,7 @@ type config struct {
 	credentials map[string]string // -server-credential, por namespace
 	sandbox     sandboxConfig     // modo stdio: o contêiner do servidor
 	limits      limitsConfig      // modo HTTP: cotas e disjuntor
+	audit       auditConfig       // a trilha e os spans
 }
 
 // authConfig é a identidade do modo HTTP: quem emite os tokens do
