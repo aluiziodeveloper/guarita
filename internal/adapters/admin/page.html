@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Guarita: aprovações</title>
+<style>
+body { font-family: sans-serif; margin: 2rem; }
+td, th { border-bottom: 1px solid #ccc; padding: .4rem; text-align: left; }
+pre { margin: 0; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>Aprovações pendentes</h1>
+<p>Operador: {{.Operator}}</p>
+{{if not .Items}}<p>Nenhum pedido esperando.</p>{{else}}
+<table>
+<tr><th>Agente</th><th>Servidor</th><th>Ferramenta</th>
+<th>Argumentos</th><th>Prazo</th><th></th></tr>
+{{range .Items}}
+<tr>
+<td>{{.Agent}}</td><td>{{.Server}}</td><td>{{.Tool}}</td>
+<td><pre>{{printf "%s" .Arguments}}</pre></td>
+<td>{{.Deadline.Format "15:04:05"}}</td>
+<td>
+<form method="post" action="/approvals/{{.ID}}/approve">
+<input type="hidden" name="from" value="page">
+<button>Aprovar</button></form>
+<form method="post" action="/approvals/{{.ID}}/deny">
+<input type="hidden" name="from" value="page">
+<button>Negar</button></form>
+</td>
+</tr>
+{{end}}
+</table>
+{{end}}
+</body>
+</html>
