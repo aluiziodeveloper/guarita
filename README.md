@@ -183,7 +183,7 @@ O que for negado ou malformado volta ao agente como erro JSON-RPC e não chega a
 A partir do Capítulo 7, a Guarita também protege servidores MCP que falam o transporte Streamable HTTP. Com `-upstream`, ela escuta em `127.0.0.1:8080` e atende em `/mcp`:
 
 ```bash
-./guarita -allow read_file -upstream http://127.0.0.1:9000/mcp
+./guarita -insecure-no-auth -allow read_file -upstream http://127.0.0.1:9000/mcp
 ```
 
 O agente passa a usar `http://127.0.0.1:8080/mcp` como endereço do servidor. Cada POST passa pela mesma porta do transporte stdio; GET e DELETE seguem direto, e os eventos do fluxo chegam sem acumular. As opções:
@@ -206,7 +206,7 @@ A partir do Capítulo 8, a Guarita autentica o agente com um JWT assinado em Ed2
 ```bash
 go run ./cmd/lab-token -genkey -out lab/            # agent.key (0600) e agent.pub
 printf 'credencial-da-guarita\n' > lab/cred && chmod 600 lab/cred
-./guarita -allow read_file -upstream http://127.0.0.1:9000/mcp \
+./guarita -insecure-no-auth -allow read_file -upstream http://127.0.0.1:9000/mcp \
   -agent-key lab/agent.pub -agent-issuer https://auth.lab.test \
   -upstream-credential lab/cred
 go run ./cmd/lab-token -key lab/agent.key -iss https://auth.lab.test \
@@ -227,7 +227,7 @@ Sem *token* válido, a resposta é 401 com `WWW-Authenticate` apontando os metad
 A partir do Capítulo 9, com `-catalog`, a Guarita guarda num arquivo SQLite a impressão digital (SHA-256 da forma canônica) de cada ferramenta que o servidor anuncia, na primeira vez que a vê:
 
 ```bash
-./guarita -allow read_file -upstream http://127.0.0.1:9000/mcp -catalog catalog.db
+./guarita -insecure-no-auth -allow read_file -upstream http://127.0.0.1:9000/mcp -catalog catalog.db
 ```
 
 Se o servidor mudar a definição de uma ferramenta já fixada (nome, descrição, esquema ou qualquer outro campo), ela sai do `tools/list` que chega ao agente e qualquer `tools/call` para ela recebe o erro `-32001` com `tool definition changed since it was pinned`. A ferramenta continua barrada mesmo se o servidor voltar à definição original. Uma ferramenta que nunca apareceu num `tools/list` também é negada. O catálogo existe só no modo HTTP; sem `-catalog`, a Guarita avisa no registro que não fixa definições.
@@ -239,7 +239,7 @@ As migrações do banco ficam em `internal/adapters/sqlitestore/migrations` e s�
 A partir do Capítulo 10, a Guarita protege vários servidores ao mesmo tempo. Cada um recebe um namespace escolhido pelo operador e fica em `/mcp/{namespace}`; `-upstream` continua valendo em `/mcp`:
 
 ```bash
-./guarita -allow read_file -catalog catalog.db \
+./guarita -insecure-no-auth -allow read_file -catalog catalog.db \
   -server files=http://127.0.0.1:9001/mcp -server mail=http://127.0.0.1:9002/mcp
 ```
 
@@ -285,7 +285,7 @@ Cada pedido expira em `-approval-timeout` (2 min). Cada agente tem no máximo `-
 A partir do Capítulo 14, a Guarita pode ler o resultado de cada `tools/call` antes de ele chegar ao agente, em JSON ou em SSE, no modo HTTP:
 
 ```bash
-./guarita -policy policies -server web=http://127.0.0.1:9003/mcp -inspect-results -mark-untrusted
+./guarita -insecure-no-auth -policy policies -server web=http://127.0.0.1:9003/mcp -inspect-results -mark-untrusted
 ```
 
 - `-inspect-results` barra o resultado com caracteres invisíveis, delimitadores de modelos de conversa (`[INST]`, `<<SYS>>`, `<|im_start|>`) ou estilos que escondem texto (`display:none`, `visibility:hidden`, `font-size:0`). Rótulos de papel (`SYSTEM:`, `<system>`) e comentários HTML só vão para o registro: barrá-los barraria um terço das respostas legítimas do corpus de teste. O resultado barrado chega ao agente como erro de ferramenta, com `isError`.
@@ -299,7 +299,7 @@ A partir do Capítulo 15, um modelo local no [Ollama](https://ollama.com) pode j
 docker run -d --name guarita-ollama -p 127.0.0.1:11434:11434 \
   -v guarita-ollama:/root/.ollama ollama/ollama:0.35.1
 docker exec guarita-ollama ollama pull qwen2.5:7b
-./guarita -policy policies -server web=http://127.0.0.1:9003/mcp \
+./guarita -insecure-no-auth -policy policies -server web=http://127.0.0.1:9003/mcp \
   -inspect-results -classifier http://127.0.0.1:11434
 ```
 
@@ -312,7 +312,7 @@ docker exec guarita-ollama ollama pull qwen2.5:7b
 A partir do Capítulo 16, cada servidor de `-server` pode ter a própria linha de inspetores, na ordem escrita. Sem `-pipeline`, todas as rotas usam a linha das opções `-validate-arguments`, `-dlp`, `-inspect-results`, `-classifier` e `-mark-untrusted`.
 
 ```bash
-./guarita -policy policies -catalog guarita.db \
+./guarita -insecure-no-auth -policy policies -catalog guarita.db \
   -server web=http://127.0.0.1:9003/mcp -server mail=http://127.0.0.1:9004/mcp \
   -pipeline web=injection,mark -pipeline mail=schema,dlp \
   -allow-hosts lab.test
@@ -341,7 +341,7 @@ A partir do Capítulo 17, o servidor do modo stdio pode rodar num contêiner, co
 A partir do Capítulo 18, no modo HTTP:
 
 ```bash
-./guarita -policy policies -server llm=http://127.0.0.1:9005/mcp \
+./guarita -insecure-no-auth -policy policies -server llm=http://127.0.0.1:9005/mcp \
   -quota ask_model=10/m -quota '*=120/m' \
   -cost ask_model=30 -budget 1000/h \
   -breaker-failures 5 -breaker-cooldown 30s
@@ -357,7 +357,7 @@ A partir do Capítulo 18, no modo HTTP:
 A partir do Capítulo 19, nos dois modos:
 
 ```bash
-./guarita -policy policies -server web=http://127.0.0.1:9003/mcp \
+./guarita -insecure-no-auth -policy policies -server web=http://127.0.0.1:9003/mcp \
   -audit auditoria.jsonl -audit-key chave-da-trilha -trace-file spans.json
 ./guarita audit verify -head <hash guardado à parte> auditoria.jsonl
 ```
@@ -380,6 +380,23 @@ A partir do Capítulo 20:
 - Com `-server-digest`, a Guarita confere o executável resolvido pelo `PATH` e pelos links, e executa esse arquivo; com `-sandbox`, a imagem precisa vir como `nome@sha256:…` com o mesmo digest.
 - `deploy/release/snapshot.sh` monta a release pelo GoReleaser num contêiner sem rede: binários com `-trimpath`, SBOM SPDX por pacote e `checksums.txt` assinado pelo cosign. `reproduce.sh` a monta em dois caminhos e compara as somas; `verify.sh` confere a assinatura e as somas; `tamper.sh` adultera uma cópia.
 - A CI roda o `govulncheck` e a release duas vezes; as *actions* ficam fixadas por hash e as imagens por digest, com o Dependabot propondo as atualizações.
+
+## Operação e produção
+
+A partir do Capítulo 21, o modo HTTP exige identidade: sem `-agent-key`, a Guarita só aceita o agente sem token com `-insecure-no-auth`, no loopback, como nos exemplos de laboratório acima. Fora do loopback (`-host`), ela exige também TLS.
+
+```bash
+./guarita -policy policies -server files=http://127.0.0.1:9001/mcp \
+  -listen 0.0.0.0:8443 -host guarita.exemplo:8443 \
+  -tls-cert tls.crt -tls-key tls.key \
+  -agent-key agent.pub -agent-issuer https://auth.exemplo \
+  -ops-listen 127.0.0.1:9090
+./guarita health -url http://127.0.0.1:9090/healthz
+```
+
+- `-ops-listen` expõe `/metrics`, no formato do Prometheus, `/healthz` e `/readyz`; `-pprof` acrescenta os perfis, só no loopback.
+- `deploy/guarita.Dockerfile` é a imagem distroless; `deploy/prod/` e `deploy/k8s/` têm o Compose e o manifesto Kubernetes, cada um com o seu laboratório.
+- O guia de operação está em [`docs/operations.md`](docs/operations.md).
 
 ## Ataques de laboratório
 
