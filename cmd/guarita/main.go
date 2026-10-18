@@ -66,7 +66,7 @@ func run(
 	}
 	// Os dois transportes só usam Authorize: o repasse fica com eles.
 	gate := mcpproxy.NewGate(app.NewInterceptCall(policy, nil))
-	return serveStdio(ctx, config.command, gate, stdin, stdout, stderr)
+	return serveStdio(ctx, config.stdio(), gate, stdin, stdout, stderr)
 }
 
 // #endregion
@@ -85,6 +85,7 @@ type config struct {
 	approval    approvalConfig    // modo HTTP: a aprovação humana
 	inspect     inspectConfig     // modo HTTP: os inspetores
 	credentials map[string]string // -server-credential, por namespace
+	sandbox     sandboxConfig     // modo stdio: o contêiner do servidor
 }
 
 // authConfig é a identidade do modo HTTP: quem emite os tokens do
@@ -153,8 +154,7 @@ func httpFlags(
 		"recurso protegido (padrão: http://<escuta>/mcp)")
 	flags.StringVar(&c.auth.credentialFile, "upstream-credential", "",
 		"arquivo com a credencial da Guarita para o servidor")
-	approvalFlags(flags, &c.approval)
-	inspectFlags(flags, &c.inspect)
+	defenseFlags(flags, c)
 	flags.StringVar(&c.catalogFile, "catalog", "",
 		"arquivo SQLite do catálogo de ferramentas")
 	return upstream, hosts, origins

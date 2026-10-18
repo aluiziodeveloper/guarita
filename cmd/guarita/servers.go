@@ -64,6 +64,9 @@ func (c *config) resolveServers(upstream string) error {
 	if err := c.attachCredentials(); err != nil {
 		return err
 	}
+	if c.sandbox.image != "" && len(c.servers) > 0 {
+		return errSandboxMode
+	}
 	return c.checkRoutes()
 }
 
