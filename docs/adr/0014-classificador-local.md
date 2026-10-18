@@ -27,6 +27,7 @@ Os detectores do Capítulo 14 barram sinais de estrutura, e um texto hostil vis�
 
 ## Consequências
 
+- A marcação do Capítulo 14 não substitui o classificador: com `qwen2.5:7b` no papel do agente, o agente obedeceu a 6 dos 30 ataques do teste sem marcação, a 10 com marcação e a 9 com a marcação explicada no *prompt* do sistema. A explicação fez o agente ignorar mais ataques (3, 7 e 12) e citar menos. Barrar antes de o modelo ler continua sendo a defesa que não depende dele.
 - O texto codificado passa: no conjunto ofuscado, base64, texto invertido e ROT13 ficaram abaixo do limiar.
 - No teste, um ataque ficou com 0,771, abaixo de 0,8. O desempate pelo maior limiar barra menos legítimos e deixa menos margem para os ataques.
 - As medidas valem para o modelo (pelo resumo), o *prompt* e o conjunto de referência do laboratório, que tem 132 exemplos escritos para o livro; outro modelo pede outra medida.
