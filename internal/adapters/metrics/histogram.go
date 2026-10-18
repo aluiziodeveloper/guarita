@@ -26,6 +26,7 @@ var Buckets = []float64{
 // em nanossegundos, um inteiro, para também ser atômica.
 type Histogram struct {
 	name, help string
+	label      string          // como stage="dlp", ou vazio
 	counts     []atomic.Uint64 // uma por limite, e a última para +Inf
 	sum        atomic.Int64
 }
@@ -53,8 +54,25 @@ func (h *Histogram) Observe(d time.Duration) {
 // write escreve o histograma no formato do Prometheus: cada faixa é
 // cumulativa, com todas as observações até o limite dela.
 func (h *Histogram) write(w io.Writer) {
+	h.writeHeader(w)
+	h.writeSeries(w)
+}
+
+// #endregion
+
+// writeHeader escreve a ajuda e o tipo, uma vez por família.
+func (h *Histogram) writeHeader(w io.Writer) {
 	_, _ = fmt.Fprintf(w, "# HELP %s %s\n# TYPE %s histogram\n",
 		h.name, h.help, h.name)
+}
+
+// #region metrics-histogram-series
+// writeSeries escreve as faixas, a soma e a contagem, com o rótulo.
+func (h *Histogram) writeSeries(w io.Writer) {
+	prefix, labels := "", ""
+	if h.label != "" {
+		prefix, labels = h.label+",", "{"+h.label+"}"
+	}
 	var total uint64
 	for i := range h.counts {
 		total += h.counts[i].Load()
@@ -62,12 +80,13 @@ func (h *Histogram) write(w io.Writer) {
 		if i < len(Buckets) {
 			le = strconv.FormatFloat(Buckets[i], 'g', -1, 64)
 		}
-		_, _ = fmt.Fprintf(w, "%s_bucket{le=%q} %d\n", h.name, le,
-			total)
+		_, _ = fmt.Fprintf(w, "%s_bucket{%sle=%q} %d\n", h.name, prefix,
+			le, total)
 	}
 	sum := time.Duration(h.sum.Load()).Seconds()
-	_, _ = fmt.Fprintf(w, "%s_sum %s\n%s_count %d\n", h.name,
-		strconv.FormatFloat(sum, 'g', -1, 64), h.name, total)
+	_, _ = fmt.Fprintf(w, "%s_sum%s %s\n%s_count%s %d\n", h.name,
+		labels, strconv.FormatFloat(sum, 'g', -1, 64), h.name, labels,
+		total)
 }
 
 // #endregion

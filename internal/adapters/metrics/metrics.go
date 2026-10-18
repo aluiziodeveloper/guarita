@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -14,6 +15,7 @@ type Metrics struct {
 	request, upstream, overhead *Histogram
 	forwarded, denied           counter
 	inFlight                    atomic.Int64
+	stages                      sync.Map // nome da etapa -> *Histogram
 }
 
 // New cria as medidas, todas zeradas.
@@ -140,6 +142,7 @@ func (m *Metrics) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	m.request.write(w)
 	m.upstream.write(w)
 	m.overhead.write(w)
+	m.writeStages(w)
 	writeCounters(w, "guarita_messages_total",
 		"Mensagens do agente, repassadas ou negadas.",
 		&m.forwarded, &m.denied)
