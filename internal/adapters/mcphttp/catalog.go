@@ -39,58 +39,73 @@ func WithCatalog(reviewer ToolReviewer) Option {
 	return func(h *Handler) { h.catalog = reviewer }
 }
 
+// rewrite reescreve uma mensagem JSON-RPC do servidor. Cada tipo de
+// resposta que a Guarita lê tem a sua: a de tools/list filtra pelo
+// catálogo; as outras ficam para os capítulos seguintes.
+type rewrite func(ctx context.Context, data []byte) ([]byte, error)
+
 // #region mcphttp-modify-response
-// modifyResponse filtra a resposta de tools/list, em JSON ou em fluxo.
-// Qualquer outra resposta passa sem ser lida.
+// modifyResponse escolhe a reescrita pelo pedido e a aplica à resposta,
+// em JSON ou em fluxo. Sem reescrita, a resposta passa sem ser lida.
 func (h *Handler) modifyResponse(response *http.Response) error {
 	ctx := response.Request.Context()
-	if h.catalog == nil || ctx.Value(listToolsKey{}) == nil ||
-		response.StatusCode != http.StatusOK {
+	change := h.rewriteFor(ctx)
+	if change == nil || response.StatusCode != http.StatusOK {
 		return nil
 	}
 	defer func() { _ = response.Body.Close() }()
 	body := io.LimitReader(response.Body, maxBodyBytes)
-	var filtered []byte
+	var changed []byte
 	var err error
 	if strings.HasPrefix(response.Header.Get("Content-Type"),
 		"text/event-stream") {
-		filtered, err = h.filterStream(ctx, bufio.NewReader(body))
+		changed, err = rewriteStream(ctx, bufio.NewReader(body), change)
 	} else {
-		filtered, err = readAndFilter(ctx, h.catalog, body)
+		changed, err = rewriteBody(ctx, body, change)
 	}
 	if err != nil {
 		return err
 	}
-	response.Body = io.NopCloser(bytes.NewReader(filtered))
-	response.ContentLength = int64(len(filtered))
-	response.Header.Set("Content-Length", strconv.Itoa(len(filtered)))
+	response.Body = io.NopCloser(bytes.NewReader(changed))
+	response.ContentLength = int64(len(changed))
+	response.Header.Set("Content-Length", strconv.Itoa(len(changed)))
 	return nil
 }
 
 // #endregion
 
-func readAndFilter(
-	ctx context.Context, reviewer ToolReviewer, body io.Reader,
+// rewriteFor devolve a reescrita do pedido, ou nil.
+func (h *Handler) rewriteFor(ctx context.Context) rewrite {
+	if h.catalog != nil && ctx.Value(listToolsKey{}) != nil {
+		return func(ctx context.Context, data []byte) ([]byte, error) {
+			return filterMessage(ctx, h.catalog, data)
+		}
+	}
+	return nil
+}
+
+func rewriteBody(
+	ctx context.Context, body io.Reader, change rewrite,
 ) ([]byte, error) {
 	data, err := io.ReadAll(body)
 	if err != nil {
 		return nil, err
 	}
-	return filterMessage(ctx, reviewer, data)
+	return change(ctx, data)
 }
 
 // #region mcphttp-filter-stream
-// filterStream lê o fluxo evento a evento até a resposta de tools/list,
-// filtra a linha data dela e para: não espera o servidor fechar.
-func (h *Handler) filterStream(
-	ctx context.Context, reader *bufio.Reader,
+// rewriteStream lê o fluxo evento a evento até a resposta, reescreve as
+// linhas data no caminho e para: não espera o servidor fechar.
+func rewriteStream(
+	ctx context.Context, reader *bufio.Reader, change rewrite,
 ) ([]byte, error) {
 	var out bytes.Buffer
 	for {
 		line, err := reader.ReadString('\n')
 		if payload, ok := strings.CutPrefix(line, "data:"); ok {
 			data := []byte(strings.TrimSpace(payload))
-			filtered, ferr := filterMessage(ctx, h.catalog, data)
+			filtered, ferr := change(ctx, data)
 			if ferr != nil {
 				return nil, ferr
 			}
