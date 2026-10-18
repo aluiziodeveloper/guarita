@@ -15,6 +15,7 @@ Os servidores daqui existem só para o laboratório do livro. Eles rodam dentro 
 | `exfiltration` | CPF, chave ou destino de fora nos argumentos de uma ferramenta permitida | Inspetores de DLP e de destinos | 13 |
 | `injection` | O resultado de uma busca traz texto escrito para o modelo | Revisão do resultado: sinais fortes barram, o resto chega marcado | 14 |
 | `classifier` | Injeção em prosa comum e ofuscada; o modelo local fora do ar | Classificador local medido no conjunto de referência, com prazo e plano B | 15 |
+| `pipeline` | Uma página em base64 passa pela volta, e a rota de envio, sem linha, deixa o CPF sair | Linha de inspetores por rota, com teste de camada ausente | 16 |
 
 A medida do classificador (`attacks/classifier`, `TestClassificador`) exige um Ollama local e é pulada sem ele; na CI, só o teste do modelo fora do ar roda. Para medir:
 
