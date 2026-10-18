@@ -1,0 +1,73 @@
+# Release da Guarita (Capítulo 20). goreleaser release --snapshot --clean
+# monta tudo sem publicar; o laboratório roda num contêiner sem rede.
+version: 2
+project_name: guarita
+
+before:
+  hooks:
+    # Os módulos no cache precisam ser os do go.sum.
+    - go mod verify
+
+# #region release-builds
+builds:
+  - id: guarita
+    main: ./cmd/guarita
+    binary: guarita
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    # Sem os caminhos da máquina que compilou, e com a data do commit
+    # no lugar da hora do build: o mesmo commit dá os mesmos bytes.
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+# #endregion
+
+# #region release-archives
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - src: LICENSE
+        info:
+          mtime: "{{ .CommitDate }}"
+      - src: README.md
+        info:
+          mtime: "{{ .CommitDate }}"
+
+checksum:
+  name_template: checksums.txt
+
+# Uma SBOM SPDX por arquivo, pelo syft.
+sboms:
+  - artifacts: archive
+# #endregion
+
+# #region release-signs
+# A assinatura cobre checksums.txt, e as somas cobrem cada arquivo. A
+# configuração do laboratório não usa log de transparência nem carimbo
+# de tempo, para nada sair da máquina; numa release pública, tire
+# --signing-config, e o cosign registra a assinatura no Rekor.
+signs:
+  - cmd: cosign
+    artifacts: checksum
+    signature: "${artifact}.sigstore.json"
+    args:
+      - sign-blob
+      - --key=env://COSIGN_PRIVATE_KEY
+      - --signing-config=deploy/release/signing-config.json
+      - --bundle=${signature}
+      - --yes
+      - ${artifact}
+# #endregion
+
+# As tags do livro são capNN; o snapshot leva o commit na versão.
+snapshot:
+  version_template: "0.0.0-SNAPSHOT-{{ .ShortCommit }}"
+
+changelog:
+  use: git
+  sort: asc

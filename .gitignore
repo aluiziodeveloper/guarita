@@ -13,3 +13,6 @@
 .idea/
 .DS_Store
 Thumbs.db
+
+# Saída do GoReleaser
+/dist/
