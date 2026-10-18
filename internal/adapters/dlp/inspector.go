@@ -37,6 +37,7 @@ func DefaultActions() Actions {
 		SignalCPF:         domain.DecisionRequireApproval,
 		SignalEntropy:     domain.DecisionRequireApproval,
 		SignalDestination: domain.DecisionDeny,
+		SignalCard:        domain.DecisionDeny,
 	}
 }
 
@@ -126,6 +127,14 @@ func direct(field, text string) []domain.Finding {
 			findings = append(findings, domain.Finding{
 				Field:  field,
 				Signal: SignalCPF, Detail: "dígitos verificadores válidos",
+			})
+		}
+	}
+	for _, candidate := range cardCandidate.FindAllString(text, -1) {
+		if ValidCard(candidate) {
+			findings = append(findings, domain.Finding{
+				Field:  field,
+				Signal: SignalCard, Detail: "Luhn válido",
 			})
 		}
 	}
