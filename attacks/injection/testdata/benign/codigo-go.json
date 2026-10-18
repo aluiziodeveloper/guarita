@@ -1,0 +1,1 @@
+{"text":"func main() {\n\tfmt.Println(\"ok\")\n}"}

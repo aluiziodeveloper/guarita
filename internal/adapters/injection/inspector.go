@@ -20,61 +20,67 @@ import (
 
 var _ app.ResultInspector = (*Inspector)(nil)
 
-// Sinais do inspetor.
+// Sinais do inspetor. Os três primeiros são fortes: um resultado
+// legítimo quase nunca os tem. Os dois últimos são fracos: aparecem em
+// transcrições, fichas técnicas e páginas comuns.
 const (
-	SignalHidden       = "hidden"        // caractere invisível ou de controle
-	SignalRoleMarker   = "role-marker"   // imita uma mensagem da conversa
-	SignalHiddenMarkup = "hidden-markup" // HTML que esconde texto
+	SignalHidden        = "hidden"         // caractere que não aparece
+	SignalChatDelimiter = "chat-delimiter" // delimitador de conversa
+	SignalHiddenStyle   = "hidden-style"   // estilo que some com o texto
+	SignalRoleLabel     = "role-label"     // rótulo ou etiqueta de papel
+	SignalHTMLComment   = "html-comment"   // comentário com palavras
 )
 
 // must compila na inicialização: um padrão errado derruba a partida.
 var must = regexp.MustCompile
 
-// #region injection-role-markers
-// roleMarkers são as formas que um texto usa para se passar por uma
-// mensagem do sistema, do assistente ou de quem escreve as instruções:
-// um rótulo de papel no começo da linha, uma etiqueta de papel, os
-// delimitadores dos modelos de conversa abertos.
-var roleMarkers = []*regexp.Regexp{
-	must(`(?im)^\s*(?:system|sistema|assistant|assistente|` +
-		`developer)\s*:`),
-	must(`(?i)<\s*/?\s*(?:system|assistant|developer|` +
-		`instructions?)\b[^>]*>`),
-	must(`\[/?(?:INST|SYS)\]|<</?SYS>>|<\|im_(?:start|end)\|>`),
-	must(`(?im)^\s*#{2,}\s*(?:system|instructions?)\b`),
-}
-
-// #endregion
-
-// #region injection-hidden-markup
-// hiddenMarkup são as formas de pôr texto numa página sem mostrá-lo:
-// um comentário com palavras e um estilo que some com o elemento.
-var hiddenMarkup = []*regexp.Regexp{
-	must(`<!--[\s\S]*?\pL[\s\S]*?-->`),
-	must(`(?i)style\s*=\s*["'][^"']*(?:display\s*:\s*none|` +
-		`visibility\s*:\s*hidden|font-size\s*:\s*0)`),
-}
-
-// #endregion
-
-// patterns liga cada sinal às suas formas.
+// #region injection-patterns
+// patterns são as formas de cada sinal. Os delimitadores são os dos
+// modelos de conversa abertos; os estilos, os que escondem um elemento;
+// os rótulos, os que imitam quem fala numa conversa.
 var patterns = []struct {
 	signal string
 	forms  []*regexp.Regexp
-}{{SignalRoleMarker, roleMarkers}, {SignalHiddenMarkup, hiddenMarkup}}
+}{
+	{SignalChatDelimiter, []*regexp.Regexp{
+		must(`\[/?(?:INST|SYS)\]|<</?SYS>>|<\|im_(?:start|end)\|>`),
+	}},
+	{SignalHiddenStyle, []*regexp.Regexp{must(`(?i)style\s*=\s*` +
+		`["'][^"']*(?:display\s*:\s*none|visibility\s*:\s*hidden|` +
+		`font-size\s*:\s*0)`)}},
+	{SignalRoleLabel, []*regexp.Regexp{
+		must(`(?im)^\s*(?:system|sistema|assistant|assistente|` +
+			`developer)\s*:`),
+		must(`(?i)<\s*/?\s*(?:system|assistant|developer|` +
+			`instructions?)\b[^>]*>`),
+		must(`(?im)^\s*#{2,}\s*(?:system|instructions?)\b`),
+	}},
+	{SignalHTMLComment, []*regexp.Regexp{
+		must(`<!--[\s\S]*?\pL[\s\S]*?-->`),
+	}},
+}
+
+// #endregion
 
 // Actions é a decisão de cada sinal. Num resultado, qualquer coisa que
 // não seja allow barra o resultado inteiro.
 type Actions map[string]domain.Decision
 
-// DefaultActions barra os três sinais.
+// #region injection-actions
+// DefaultActions barra os sinais fortes e deixa os fracos passar, com
+// registro: barrá-los barraria uma em cada três respostas legítimas do
+// corpus. O que passa chega ao agente marcado como não confiável.
 func DefaultActions() Actions {
 	return Actions{
-		SignalHidden:       domain.DecisionDeny,
-		SignalRoleMarker:   domain.DecisionDeny,
-		SignalHiddenMarkup: domain.DecisionDeny,
+		SignalHidden:        domain.DecisionDeny,
+		SignalChatDelimiter: domain.DecisionDeny,
+		SignalHiddenStyle:   domain.DecisionDeny,
+		SignalRoleLabel:     domain.DecisionAllow,
+		SignalHTMLComment:   domain.DecisionAllow,
 	}
 }
+
+// #endregion
 
 // Inspector é o inspetor de injeção nos resultados.
 type Inspector struct{ actions Actions }
@@ -141,17 +147,25 @@ func detect(field, text string) []domain.Finding {
 
 // #endregion
 
+// #region injection-hidden-rune
 // hiddenRune acha o primeiro caractere que não aparece: formatação
-// (Cf) ou controle (Cc) fora de quebra de linha e tabulação.
+// (Cf) ou controle (Cc) fora de quebra de linha e tabulação. O U+200D
+// logo depois de um símbolo é o que junta emojis numa família, e não
+// conta.
 func hiddenRune(text string) (rune, bool) {
+	previous := rune(0)
 	for _, r := range text {
-		if unicode.Is(unicode.Cf, r) || (unicode.Is(unicode.Cc, r) &&
-			!strings.ContainsRune("\n\r\t", r)) {
+		joiner := r == '\u200d' && unicode.Is(unicode.So, previous)
+		if !joiner && (unicode.Is(unicode.Cf, r) || (unicode.Is(
+			unicode.Cc, r) && !strings.ContainsRune("\n\r\t", r))) {
 			return r, true
 		}
+		previous = r
 	}
 	return 0, false
 }
+
+// #endregion
 
 // walk chama visit para cada string do valor, com o caminho dela.
 func walk(path string, value any, visit func(field, text string)) {
