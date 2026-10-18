@@ -85,6 +85,8 @@ func subcommand(args []string) (
 		return runApprovals, true
 	case "digest":
 		return runDigest, true
+	case "version":
+		return runVersion, true
 	case "audit":
 		return func(_ context.Context, a []string, out, e io.Writer) error {
 			return runAudit(a, out, e)
