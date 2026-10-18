@@ -367,6 +367,20 @@ A partir do Capítulo 19, nos dois modos:
 - O `traceparent` do agente (W3C Trace Context) é carregado até o servidor, e o `trace_id` vai para a trilha; `-trace-file` grava os spans da Guarita em JSON.
 - `guarita audit verify` diz em que linha a trilha quebra. A cadeia sozinha não acusa quem a refaz inteira nem quem corta o fim: para isso, guarde a cabeça (o hash da última entrada) fora da máquina e passe-a em `-head`.
 
+## Servidor aprovado e release verificável
+
+A partir do Capítulo 20:
+
+```bash
+./guarita digest lab-files            # o digest da versão examinada
+./guarita -allow read_file -server-digest sha256:… -- lab-files -root dados
+./guarita version -deps               # de onde o binário veio
+```
+
+- Com `-server-digest`, a Guarita confere o executável resolvido pelo `PATH` e pelos links, e executa esse arquivo; com `-sandbox`, a imagem precisa vir como `nome@sha256:…` com o mesmo digest.
+- `deploy/release/snapshot.sh` monta a release pelo GoReleaser num contêiner sem rede: binários com `-trimpath`, SBOM SPDX por pacote e `checksums.txt` assinado pelo cosign. `reproduce.sh` a monta em dois caminhos e compara as somas; `verify.sh` confere a assinatura e as somas; `tamper.sh` adultera uma cópia.
+- A CI roda o `govulncheck` e a release duas vezes; as *actions* ficam fixadas por hash e as imagens por digest, com o Dependabot propondo as atualizações.
+
 ## Ataques de laboratório
 
 O diretório [`attacks/`](attacks/README.md) reúne os ataques reproduzíveis, um pacote por ataque, cada um com o teste que o roda sem e com a defesa. Eles rodam com o resto da suíte em `go test ./...`; a medida do classificador só roda com um Ollama local.
