@@ -54,18 +54,20 @@ func (uc *InterceptCall) ReviewResult(
 	ctx context.Context, call domain.Call, result json.RawMessage,
 ) (json.RawMessage, error) {
 	input := uc.input(ctx, call)
-	for _, inspector := range uc.resultInspectors {
-		inspection, err := inspector.InspectResult(ctx, input, result)
-		if err != nil {
-			return nil, fmt.Errorf("%w: %w", ErrInspectionFailed, err)
-		}
-		if len(inspection.Findings) > 0 {
-			uc.findings(input, inspection)
-		}
-		if inspection.Decision != domain.DecisionAllow {
-			return nil, fmt.Errorf("%w: %s", ErrResultBlocked,
-				summary(inspection.Findings))
-		}
+	_, stopper, err := runStages(uc.resultInspectors,
+		func(i ResultInspector) (domain.Inspection, error) {
+			return i.InspectResult(ctx, input, result)
+		},
+		func(in domain.Inspection) { uc.findings(input, in) },
+		func(in domain.Inspection) bool {
+			return in.Decision != domain.DecisionAllow
+		})
+	if err != nil {
+		return nil, err
+	}
+	if stopper != nil {
+		return nil, fmt.Errorf("%w: %s", ErrResultBlocked,
+			summary(stopper.Findings))
 	}
 	if uc.marker == nil {
 		return result, nil

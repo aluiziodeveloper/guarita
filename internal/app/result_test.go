@@ -59,3 +59,24 @@ func TestReviewResult(t *testing.T) {
 }
 
 // #endregion
+
+// #region app-review-empty-decision-test
+// Um inspetor que devolve uma decisão vazia, ou fora do conjunto, não
+// permitiu: o resultado é barrado. A inspeção zero, que o laço devolvia
+// quando ninguém parava, tem essa mesma decisão vazia, e por isso quem
+// parou volta como ponteiro, e não como valor.
+func TestReviewResult_decisaoVazia(t *testing.T) {
+	result := json.RawMessage(`{"content":[{"text":"ok"}]}`)
+	for _, decision := range []domain.Decision{"", "talvez"} {
+		uc := NewInterceptCall(nil, nil, WithResultInspectors(
+			fixedResult{domain.Inspection{Decision: decision}}))
+		_, err := uc.ReviewResult(t.Context(),
+			domain.Call{ToolName: "web_search"}, result)
+		t.Logf("decisão %q: %v", decision, err)
+		if !errors.Is(err, ErrResultBlocked) {
+			t.Errorf("decisão %q passou", decision)
+		}
+	}
+}
+
+// #endregion

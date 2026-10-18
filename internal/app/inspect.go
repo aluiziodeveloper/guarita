@@ -44,32 +44,64 @@ func WithFindings(observe FindingsObserver) Option {
 
 // #endregion
 
+// #region app-run-stages
+// runStages passa um sujeito pelos inspetores, na ordem dada, e serve
+// aos dois sentidos: I é Inspector na ida e ResultInspector na volta.
+// A decisão mais severa vence; a fila para no primeiro inspetor que
+// stop aponta, e ele volta como o motivo, ou nil, se ninguém parou.
+// Um erro para tudo.
+func runStages[I any](
+	stages []I,
+	inspect func(I) (domain.Inspection, error),
+	observe func(domain.Inspection),
+	stop func(domain.Inspection) bool,
+) (domain.Decision, *domain.Inspection, error) {
+	decision := domain.DecisionAllow
+	for _, s := range stages {
+		inspection, err := inspect(s)
+		if err != nil {
+			return domain.DecisionDeny, nil,
+				fmt.Errorf("%w: %w", ErrInspectionFailed, err)
+		}
+		if len(inspection.Findings) > 0 {
+			observe(inspection)
+		}
+		decision = domain.Stricter(decision, inspection.Decision)
+		if stop(inspection) {
+			return decision, &inspection, nil
+		}
+	}
+	return decision, nil, nil
+}
+
+// #endregion
+
 // #region app-intercept-inspect
 // inspect passa pelos inspetores a chamada que a política não negou. A
 // decisão mais severa vence; negar devolve o motivo, sem os dados.
 func (uc *InterceptCall) inspect(
 	ctx context.Context, call domain.Call, decision domain.Decision,
 ) (domain.Decision, error) {
-	input := uc.input(ctx, call)
-	for _, inspector := range uc.inspectors {
-		if decision == domain.DecisionDeny {
-			break
-		}
-		inspection, err := inspector.Inspect(ctx, input)
-		if err != nil {
-			return domain.DecisionDeny,
-				fmt.Errorf("%w: %w", ErrInspectionFailed, err)
-		}
-		if len(inspection.Findings) > 0 {
-			uc.findings(input, inspection)
-		}
-		decision = domain.Stricter(decision, inspection.Decision)
-		if inspection.Decision == domain.DecisionDeny {
-			return decision, fmt.Errorf("%w: %s", ErrInspectionDenied,
-				summary(inspection.Findings))
-		}
+	if decision == domain.DecisionDeny {
+		return decision, nil
 	}
-	return decision, nil
+	input := uc.input(ctx, call)
+	found, stopper, err := runStages(uc.inspectors,
+		func(i Inspector) (domain.Inspection, error) {
+			return i.Inspect(ctx, input)
+		},
+		func(in domain.Inspection) { uc.findings(input, in) },
+		func(in domain.Inspection) bool {
+			return in.Decision == domain.DecisionDeny
+		})
+	if err != nil {
+		return domain.DecisionDeny, err
+	}
+	if stopper != nil {
+		return found, fmt.Errorf("%w: %s", ErrInspectionDenied,
+			summary(stopper.Findings))
+	}
+	return domain.Stricter(decision, found), nil
 }
 
 // #endregion
