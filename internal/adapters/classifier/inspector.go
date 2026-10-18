@@ -7,6 +7,7 @@ package classifier
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -16,8 +17,12 @@ import (
 
 var _ app.ResultInspector = (*Inspector)(nil)
 
-// SignalClassifier é o achado de um texto que o modelo julgou injeção.
-const SignalClassifier = "classifier"
+// Sinais do inspetor. O segundo não barra nada por si: diz que o
+// modelo falhou e que outro inspetor decidiu no lugar dele.
+const (
+	SignalClassifier  = "classifier"             // julgado injeção
+	SignalUnavailable = "classifier-unavailable" // modelo falhou
+)
 
 // #region classifier-model
 // Model é a porta para o modelo: uma pergunta de sim ou não, com a
@@ -54,7 +59,8 @@ type Inspector struct {
 	model     Model
 	threshold float64
 	timeout   time.Duration
-	chunk     int // runas por pergunta
+	chunk     int                 // runas por pergunta
+	fallback  app.ResultInspector // decide quando o modelo falha
 }
 
 // Option ajusta o inspetor.
@@ -79,6 +85,16 @@ func WithTimeout(timeout time.Duration) Option {
 	return func(i *Inspector) { i.timeout = timeout }
 }
 
+// #region classifier-with-fallback
+// WithFallback dá ao inspetor um plano B: quando o modelo falha ou o
+// prazo vence, o inspetor dado decide, e o achado registra a falha.
+// Sem plano B, a falha volta como erro, e o resultado é barrado.
+func WithFallback(fallback app.ResultInspector) Option {
+	return func(i *Inspector) { i.fallback = fallback }
+}
+
+// #endregion
+
 // WithChunk troca o tamanho de cada pedaço, em runas.
 func WithChunk(runes int) Option {
 	return func(i *Inspector) { i.chunk = max(runes, 1) }
@@ -87,22 +103,24 @@ func WithChunk(runes int) Option {
 // #region classifier-inspect
 // InspectResult pergunta ao modelo sobre cada pedaço de cada texto e
 // para no primeiro que passa do limiar. Um erro do modelo, inclusive
-// o prazo vencido, volta como erro: o caso de uso barra o resultado.
+// o prazo vencido, vai para o plano B.
 func (i *Inspector) InspectResult(
-	ctx context.Context, _ domain.PolicyInput, result json.RawMessage,
+	ctx context.Context, input domain.PolicyInput,
+	result json.RawMessage,
 ) (domain.Inspection, error) {
 	allow := domain.Inspection{Decision: domain.DecisionAllow}
 	blocks, err := texts(result)
 	if err != nil {
 		return allow, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, i.timeout)
+	budget, cancel := context.WithTimeout(ctx, i.timeout)
 	defer cancel()
 	for _, block := range blocks {
 		for _, piece := range chunks(block.text, i.chunk) {
-			p, err := i.model.YesProbability(ctx, Prompt, wrap(piece))
+			p, err := i.model.YesProbability(budget, Prompt,
+				wrap(piece))
 			if err != nil {
-				return allow, fmt.Errorf("classifier: %w", err)
+				return i.recover(ctx, input, result, err)
 			}
 			if p >= i.threshold {
 				return deny(block.field, p), nil
@@ -110,6 +128,33 @@ func (i *Inspector) InspectResult(
 		}
 	}
 	return allow, nil
+}
+
+// #endregion
+
+// #region classifier-recover
+// recover decide sem o modelo, com o contexto de quem chamou, que
+// ainda vale: o que venceu foi o prazo do classificador. O achado diz
+// só o tipo da falha, e não a mensagem, que traz o endereço do modelo.
+func (i *Inspector) recover(
+	ctx context.Context, input domain.PolicyInput,
+	result json.RawMessage, cause error,
+) (domain.Inspection, error) {
+	if i.fallback == nil {
+		return domain.Inspection{}, fmt.Errorf("classifier: %w", cause)
+	}
+	inspection, err := i.fallback.InspectResult(ctx, input, result)
+	if err != nil {
+		return inspection, err
+	}
+	kind := "error"
+	if errors.Is(cause, context.DeadlineExceeded) {
+		kind = "deadline"
+	}
+	inspection.Findings = append(inspection.Findings, domain.Finding{
+		Signal: SignalUnavailable, Detail: kind,
+	})
+	return inspection, nil
 }
 
 // #endregion
