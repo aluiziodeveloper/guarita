@@ -352,6 +352,21 @@ A partir do Capítulo 18, no modo HTTP:
 - A cota é a etapa `quota` da linha de inspetores, a primeira da ida na linha padrão, e pode ser posta em `-pipeline`.
 - `-breaker-failures N` abre o disjuntor de um servidor depois de N falhas seguidas (erro de rede ou status 5xx); aberto, ele responde 503 com `Retry-After` sem chamar o servidor e, depois de `-breaker-cooldown`, deixa passar uma chamada de teste.
 
+## Trilha de auditoria
+
+A partir do Capítulo 19, nos dois modos:
+
+```bash
+./guarita -policy policies -server web=http://127.0.0.1:9003/mcp \
+  -audit auditoria.jsonl -audit-key chave-da-trilha -trace-file spans.json
+./guarita audit verify -head <hash guardado à parte> auditoria.jsonl
+```
+
+- Cada decisão vira uma linha de `auditoria.jsonl`, encadeada à anterior por SHA-256, antes de a chamada seguir; se a gravação falhar, a chamada é negada. A trilha existente é verificada na partida e não é estendida se estiver quebrada.
+- Os argumentos não entram na trilha: entra o HMAC-SHA256 deles, com a chave de `-audit-key`, que permite conferir um argumento suspeito sem revelar os outros.
+- O `traceparent` do agente (W3C Trace Context) é carregado até o servidor, e o `trace_id` vai para a trilha; `-trace-file` grava os spans da Guarita em JSON.
+- `guarita audit verify` diz em que linha a trilha quebra. A cadeia sozinha não acusa quem a refaz inteira nem quem corta o fim: para isso, guarde a cabeça (o hash da última entrada) fora da máquina e passe-a em `-head`.
+
 ## Ataques de laboratório
 
 O diretório [`attacks/`](attacks/README.md) reúne os ataques reproduzíveis, um pacote por ataque, cada um com o teste que o roda sem e com a defesa. Eles rodam com o resto da suíte em `go test ./...`; a medida do classificador só roda com um Ollama local.
