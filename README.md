@@ -336,6 +336,22 @@ A partir do Capítulo 17, o servidor do modo stdio pode rodar num contêiner, co
 - Cada `-sandbox-mount origem:destino` é só de leitura; `:rw` no fim a torna gravável. A origem é resolvida seguindo os *symlinks*, e a Guarita recusa diretórios do sistema (`/etc`, `/proc`, `/run`, onde fica o *socket* do Docker, e outros), diretórios de credenciais da home (`.ssh`, `.aws`, `.config` e outros) e qualquer montagem que contenha a home inteira.
 - `-sandbox` só vale no modo stdio: os servidores de `-upstream` e `-server` são remotos.
 
+## Cotas e disjuntor
+
+A partir do Capítulo 18, no modo HTTP:
+
+```bash
+./guarita -policy policies -server llm=http://127.0.0.1:9005/mcp \
+  -quota ask_model=10/m -quota '*=120/m' \
+  -cost ask_model=30 -budget 1000/h \
+  -breaker-failures 5 -breaker-cooldown 30s
+```
+
+- `-quota ferramenta=N/s|m|h[:rajada]` limita as chamadas de cada agente a cada ferramenta de cada servidor; `*` vale para as ferramentas sem taxa própria. Sem rajada, ela é N.
+- `-cost ferramenta=unidades` é o custo estimado de uma chamada (1, sem a opção), e `-budget N/h` é o orçamento de unidades de cada agente, somado em todas as rotas. Um custo maior que a rajada do orçamento impede a partida.
+- A cota é a etapa `quota` da linha de inspetores, a primeira da ida na linha padrão, e pode ser posta em `-pipeline`.
+- `-breaker-failures N` abre o disjuntor de um servidor depois de N falhas seguidas (erro de rede ou status 5xx); aberto, ele responde 503 com `Retry-After` sem chamar o servidor e, depois de `-breaker-cooldown`, deixa passar uma chamada de teste.
+
 ## Ataques de laboratório
 
 O diretório [`attacks/`](attacks/README.md) reúne os ataques reproduzíveis, um pacote por ataque, cada um com o teste que o roda sem e com a defesa. Eles rodam com o resto da suíte em `go test ./...`; a medida do classificador só roda com um Ollama local.
