@@ -101,9 +101,9 @@ func WithChunk(runes int) Option {
 }
 
 // #region classifier-inspect
-// InspectResult pergunta ao modelo sobre cada pedaço de cada texto e
-// para no primeiro que passa do limiar. Um erro do modelo, inclusive
-// o prazo vencido, vai para o plano B.
+// InspectResult pontua cada texto e para no primeiro que passa do
+// limiar. Um erro do modelo, inclusive o prazo vencido, vai para o
+// plano B.
 func (i *Inspector) InspectResult(
 	ctx context.Context, input domain.PolicyInput,
 	result json.RawMessage,
@@ -116,18 +116,35 @@ func (i *Inspector) InspectResult(
 	budget, cancel := context.WithTimeout(ctx, i.timeout)
 	defer cancel()
 	for _, block := range blocks {
-		for _, piece := range chunks(block.text, i.chunk) {
-			p, err := i.model.YesProbability(budget, Prompt,
-				wrap(piece))
-			if err != nil {
-				return i.recover(ctx, input, result, err)
-			}
-			if p >= i.threshold {
-				return deny(block.field, p), nil
-			}
+		p, err := i.Score(budget, block.text)
+		if err != nil {
+			return i.recover(ctx, input, result, err)
+		}
+		if p >= i.threshold {
+			return deny(block.field, p), nil
 		}
 	}
 	return allow, nil
+}
+
+// #endregion
+
+// #region classifier-score
+// Score devolve a maior probabilidade entre os pedaços do texto: basta
+// um pedaço com instrução. A avaliação do Capítulo 15 mede este
+// método, e não uma cópia da conta.
+func (i *Inspector) Score(
+	ctx context.Context, text string,
+) (float64, error) {
+	var highest float64
+	for _, piece := range chunks(text, i.chunk) {
+		p, err := i.model.YesProbability(ctx, Prompt, wrap(piece))
+		if err != nil {
+			return 0, err
+		}
+		highest = max(highest, p)
+	}
+	return highest, nil
 }
 
 // #endregion
