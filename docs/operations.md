@@ -37,7 +37,7 @@ Em todos, a Guarita roda só leitura, sem capabilities nem escalada de privilég
 
 ## SLO
 
-O objetivo é que a Guarita acrescente no máximo 5 ms no p99, com a política, os inspetores determinísticos e as métricas. `TestSLO` (`GUARITA_SLO=1 go test -run TestSLO ./cmd/guarita`) mede isso a cada push na CI. No laboratório, o acréscimo no p99 foi de 0,4 a 0,7 ms nessas configurações; com a trilha, que espera o `fsync`, de 1,4 ms, e o classificador local do Capítulo 15 fica fora do orçamento, porque leva segundos.
+O objetivo é que a Guarita acrescente no máximo 5 ms no p99, com a política, os inspetores determinísticos e as métricas. `TestSLO` (`GUARITA_SLO=1 go test -run TestSLO ./cmd/guarita`) mede isso a cada push na CI. Na execução gravada no laboratório, o acréscimo no p99 foi de 0,41 a 0,69 ms nessas configurações; com a trilha, que espera o `fsync`, de 2,62 ms. Os números variam de uma execução para outra, e o classificador local do Capítulo 15 fica fora do orçamento, porque leva segundos.
 
 Em produção, acompanhe a fração dos pedidos com `guarita_overhead_seconds` acima de 5 ms: com o histograma, é `1 - bucket{le="0.005"} / count`, e o orçamento de erro de um SLO de 99% é 1% dos pedidos.
 
