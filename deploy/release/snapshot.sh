@@ -6,8 +6,8 @@
 #   COSIGN_PRIVATE_KEY="$(cat cosign.key)" COSIGN_PASSWORD=… \
 #   deploy/release/snapshot.sh [opções do goreleaser release]
 set -eu
-# #region release-snapshot
 image=golang:1.27.2@sha256:820153096fda4de6ac1b7194d12e416b7dd8f4e9a33d17e0345b111b945162d8
+# #region release-snapshot
 docker run --rm --network none -u "$(id -u):$(id -g)" -e HOME=/tmp \
   -v "$TOOLS:/tools:ro" -v "$(go env GOMODCACHE):/go/pkg/mod:ro" \
   -v "$PWD:/src" -w /src \

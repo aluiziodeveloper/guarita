@@ -6,9 +6,9 @@
 # pública, registrada no Rekor, não precisa.
 #   TOOLS=dir-com-cosign deploy/release/verify.sh dist cosign.pub
 set -eu
+image=golang:1.27.2@sha256:820153096fda4de6ac1b7194d12e416b7dd8f4e9a33d17e0345b111b945162d8
 # #region release-verify
 dist=$1 key=$2
-image=golang:1.27.2@sha256:820153096fda4de6ac1b7194d12e416b7dd8f4e9a33d17e0345b111b945162d8
 docker run --rm --network none -u "$(id -u):$(id -g)" -e HOME=/tmp \
   -v "$TOOLS:/tools:ro" -v "$(realpath "$dist"):/dist:ro" \
   -v "$(realpath "$key"):/key.pub:ro" -w /dist "$image" sh -c '

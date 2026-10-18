@@ -29,7 +29,7 @@ builds:
 # #region release-archives
 archives:
   - formats: [tar.gz]
-    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    # O nome padrão: guarita_<versão>_<sistema>_<arquitetura>.tar.gz
     files:
       - src: LICENSE
         info:

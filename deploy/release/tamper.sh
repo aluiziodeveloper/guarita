@@ -20,7 +20,8 @@ check "$key"
 echo "== pacote trocado e soma refeita em checksums.txt"
 copy && printf '[LAB]' >> "$work/$pkg"
 sum=$(sha256sum "$work/$pkg" | cut -d' ' -f1)
-sed -i "s|^[0-9a-f]*  ${pkg#./}\$|$sum  ${pkg#./}|" "$work/checksums.txt"
+name=${pkg#./}
+sed -i "s|^[0-9a-f]*  $name\$|$sum  $name|" "$work/checksums.txt"
 check "$key"
 echo "== release intacta, chave pública de outra pessoa"
 copy && check "$other"
