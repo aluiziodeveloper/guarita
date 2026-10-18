@@ -17,6 +17,8 @@ type inspectConfig struct {
 	results    bool   // revisa os resultados de tools/call
 	mark       bool   // marca os resultados como não confiáveis
 	classifier classifierConfig
+	pipelines  map[string][]string // -pipeline; "*" vale para as outras
+	required   []string            // -require-stages
 }
 
 // inspectFlags declara as opções dos inspetores.
@@ -34,6 +36,14 @@ func inspectFlags(flags *flag.FlagSet, c *inspectConfig) {
 	flags.BoolVar(&c.mark, "mark-untrusted", false,
 		"marca o texto dos resultados como conteúdo não confiável")
 	classifierFlags(flags, &c.classifier)
+	flags.Func("pipeline", "etapas de uma rota, na ordem: "+
+		"nome=etapa,…; sem nome, das rotas sem linha própria",
+		pipelineFlag(c))
+	flags.Func("require-stages", "etapas que toda rota precisa ter",
+		func(value string) error {
+			c.required = append(c.required, list(value)...)
+			return nil
+		})
 }
 
 // logFindings registra o que o inspetor achou: campo e sinal, sem os

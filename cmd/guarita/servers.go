@@ -54,13 +54,17 @@ func serverFlag(servers *[]upstreamServer) func(string) error {
 // #endregion
 
 // resolveServers põe o servidor de -upstream, se houver, primeiro (ele
-// fica em /mcp, como até o Capítulo 9) e entrega as credenciais.
+// fica em /mcp, como até o Capítulo 9), entrega as credenciais e
+// confere os nomes de rota de -pipeline.
 func (c *config) resolveServers(upstream string) error {
 	if upstream != "" {
 		c.servers = append([]upstreamServer{{url: upstream}},
 			c.servers...)
 	}
-	return c.attachCredentials()
+	if err := c.attachCredentials(); err != nil {
+		return err
+	}
+	return c.checkRoutes()
 }
 
 // credentialFlag lê -server-credential nome=arquivo.

@@ -257,8 +257,8 @@ func newHandler(
 		useCase = append(useCase, app.WithCatalog(catalog))
 		options = append(options, mcphttp.WithCatalog(catalog))
 	}
-	line, err := registry(c.inspect, catalog, d.classifier).Build(
-		defaultStages(c.inspect, catalog != nil))
+	line, err := routeLine(c.inspect, server.name, catalog, d.classifier,
+		logger)
 	if err != nil {
 		return nil, err
 	}
