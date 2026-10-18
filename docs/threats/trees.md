@@ -49,7 +49,7 @@ A raiz é um nó **E**: basta cortar um dos quatro ramos para o ataque falhar. P
 | `data-exfiltration` | Levar dados sensíveis num argumento | dado sensível no contexto E argumento sem inspeção | DLP, destinos permitidos e esquema nos argumentos (Cap. 13) |
 | `sandbox-escape` | Ler ou alterar o host a partir do servidor | rede aberta OU arquivos montados OU symlink | contêiner restrito (Cap. 17) |
 | `credential-theft` | Usar a credencial da Guarita em nome do agente | *token* do usuário repassado OU credencial compartilhada | credencial por servidor, sem repasse (Cap. 8) |
-| `supply-chain` | Rodar código novo sob uma versão aprovada | pacote atualizado sem verificação | versão fixa e assinatura (Cap. 20) |
+| `supply-chain` | Rodar código novo sob uma versão aprovada | pacote atualizado com a mesma versão declarada OU o mesmo nome antes no PATH OU imagem trocada sob a mesma etiqueta | digest do executável e da imagem; release reproduzível e assinada (Cap. 20) |
 | `resource-abuse` | Esgotar cota ou fatura | laço de chamadas E ausência de limite | cota por agente e ferramenta (Cap. 18) |
 | `insecure-parsing` | Derrubar ou enganar o *parser* | mensagem grande OU ambígua OU malformada | limites e *fuzzing* (Cap. 6) |
 | `approval-forgery` | Obter aprovação sem decisão humana real | aprovação forjada OU fadiga | máquina de estados, plano do operador separado e limites (Cap. 12) |
