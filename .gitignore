@@ -16,3 +16,6 @@ Thumbs.db
 
 # Saída do GoReleaser
 /dist/
+
+# Segredos gerados pelos laboratórios de implantação
+/deploy/prod/secrets/

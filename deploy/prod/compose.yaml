@@ -1,0 +1,82 @@
+# A Guarita em produção, num host com Docker (Capítulo 21). lab.sh gera
+# os segredos do laboratório em ./secrets, sobe tudo e confere.
+name: guarita-prod
+
+services:
+  # Entrega os segredos como um orquestrador: do root, para o grupo do
+  # processo da Guarita, modo 0440. Prepara também o volume da trilha.
+  secrets:
+    image: alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+    network_mode: none
+    volumes:
+      - ./secrets:/in:ro
+      - guarita-secrets:/out
+      - guarita-audit:/audit
+    command:
+      - sh
+      - -c
+      - >-
+        cp /in/agent.pub /in/tls.crt /in/tls.key /in/audit.key /out/ &&
+        chown 0:65532 /out/* && chmod 0440 /out/* &&
+        chown 65532:65532 /audit && chmod 0700 /audit
+
+  # #region deploy-prod-guarita
+  guarita:
+    build:
+      context: ../..
+      dockerfile: deploy/guarita.Dockerfile
+    image: guarita:cap21
+    depends_on:
+      secrets:
+        condition: service_completed_successfully
+    command: [
+      "-policy", "/policies",
+      "-server", "files=http://127.0.0.1:9001/mcp",
+      "-listen", "0.0.0.0:8443", "-host", "guarita.lab:8443",
+      "-tls-cert", "/run/guarita/tls.crt",
+      "-tls-key", "/run/guarita/tls.key",
+      "-agent-key", "/run/guarita/agent.pub",
+      "-agent-issuer", "https://auth.lab.test",
+      "-dlp", "-inspect-results", "-mark-untrusted",
+      "-audit", "/var/lib/guarita/auditoria.jsonl",
+      "-audit-key", "/run/guarita/audit.key",
+      "-ops-listen", "0.0.0.0:9090"]
+  # #endregion
+  # #region deploy-prod-hardening
+    read_only: true
+    user: "65532:65532"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    deploy:
+      resources:
+        limits: {cpus: "1", memory: 256M, pids: 128}
+    volumes:
+      - guarita-secrets:/run/guarita:ro
+      - guarita-audit:/var/lib/guarita
+    ports:
+      - "127.0.0.1:8443:8443"
+      - "127.0.0.1:9090:9090"
+    healthcheck:
+      test: ["CMD", "/guarita", "health"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+  # #endregion
+
+  # O servidor MCP do laboratório, na rede da Guarita: ela o alcança
+  # pelo loopback, e ele não tem porta própria fora dela.
+  files:
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile
+    image: guarita-lab:cap21
+    network_mode: service:guarita
+    depends_on: [guarita]
+    command: ["/lab-load", "-serve", "127.0.0.1:9001"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+volumes:
+  guarita-secrets:
+  guarita-audit:
