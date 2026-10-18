@@ -1,0 +1,120 @@
+# A Guarita num cluster Kubernetes (Capítulo 21). O Secret
+# guarita-secrets é criado à parte, por kind-lab.sh ou pelo cofre do
+# cluster: agent.pub, tls.crt, tls.key e audit.key.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: guarita
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: guarita
+  namespace: guarita
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: guarita}
+  template:
+    metadata:
+      labels: {app: guarita}
+    spec:
+      automountServiceAccountToken: false
+      # #region deploy-k8s-pod-security
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      # #endregion
+      containers:
+        - name: guarita
+          image: guarita:cap21
+          args:
+            - -policy=/policies
+            - -server=files=http://127.0.0.1:9001/mcp
+            - -listen=0.0.0.0:8443
+            - -host=guarita.guarita.svc:8443
+            - -tls-cert=/run/guarita/tls.crt
+            - -tls-key=/run/guarita/tls.key
+            - -agent-key=/run/guarita/agent.pub
+            - -agent-issuer=https://auth.lab.test
+            - -dlp
+            - -inspect-results
+            - -mark-untrusted
+            - -audit=/var/lib/guarita/auditoria.jsonl
+            - -audit-key=/run/guarita/audit.key
+            - -ops-listen=0.0.0.0:9090
+          ports:
+            - {name: mcp, containerPort: 8443}
+            - {name: ops, containerPort: 9090}
+          # #region deploy-k8s-container
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 100m, memory: 64Mi}
+            limits: {cpu: "1", memory: 256Mi}
+          livenessProbe:
+            httpGet: {path: /healthz, port: ops}
+          readinessProbe:
+            httpGet: {path: /readyz, port: ops}
+            periodSeconds: 2
+          volumeMounts:
+            - {name: secrets, mountPath: /run/guarita, readOnly: true}
+            - {name: audit, mountPath: /var/lib/guarita}
+          # #endregion
+        # O servidor do laboratório, no mesmo pod: a Guarita o alcança
+        # pelo loopback, e ele não tem porta no Service.
+        - name: files
+          image: guarita-lab:cap21
+          args: ["-serve", "127.0.0.1:9001"]
+          command: ["/lab-load"]
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            limits: {cpu: 500m, memory: 64Mi}
+      volumes:
+        # O kubelet entrega como root:65532, modo 0440, pelo fsGroup.
+        - name: secrets
+          secret: {secretName: guarita-secrets, defaultMode: 0400}
+        # Num cluster de verdade, um PersistentVolumeClaim: a trilha
+        # precisa sobreviver ao pod.
+        - name: audit
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: guarita
+  namespace: guarita
+spec:
+  selector: {app: guarita}
+  ports:
+    - {name: mcp, port: 8443, targetPort: mcp}
+    - {name: ops, port: 9090, targetPort: ops}
+---
+# #region deploy-k8s-network-policy
+# Só os pods marcados como agente chegam à porta do agente, e só os de
+# monitoramento à de operação. Nada sai do pod da Guarita: o servidor
+# está no loopback dele.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: guarita
+  namespace: guarita
+spec:
+  podSelector:
+    matchLabels: {app: guarita}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from: [{podSelector: {matchLabels: {role: agent}}}]
+      ports: [{port: 8443}]
+    - from: [{podSelector: {matchLabels: {role: monitoring}}}]
+      ports: [{port: 9090}]
+  egress: []
+# #endregion
