@@ -41,6 +41,13 @@ jobs:
       - name: Run tests
         run: go test -race ./...
 
+      # Sem -race, que mudaria o tempo medido; o SLO é generoso para
+      # uma máquina compartilhada da CI.
+      - name: Check the latency SLO
+        env:
+          GUARITA_SLO: "1"
+        run: go test -count=1 -run TestSLO -v ./cmd/guarita
+
       - name: Run go vet
         run: go vet ./...
 
