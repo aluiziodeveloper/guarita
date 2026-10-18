@@ -30,33 +30,52 @@ var errAuthRequired = errors.New(
 const httpShutdownGrace = 5 * time.Second
 
 // #region cmd-guarita-serve-http
-// serveHTTP escuta, monta o endpoint e atende até ctx acabar. Aí para
-// de aceitar conexões e espera as chamadas em curso, com prazo.
+// serveHTTP confere os padrões, abre as escutas e atende até ctx
+// acabar; aí as chamadas em curso terminam, com prazo.
 func serveHTTP(
 	ctx context.Context, c config, d deciders,
 	stderr io.Writer,
 ) error {
+	if err := c.checkDefaults(); err != nil {
+		return err
+	}
 	logger := newLogger(stderr)
-	store, closeStore, err := openStore(ctx, c, logger)
+	store, closeSides, err := openSides(ctx, c, d, logger, stderr)
 	if err != nil {
 		return err
 	}
-	defer closeStore()
-	stopAdmin, err := startAdmin(c.approval, d.queue, stderr)
-	if err != nil {
-		return err
-	}
-	defer stopAdmin()
+	defer closeSides()
 	listener, endpoint, err := listen(ctx, c, d, store, logger)
 	if err != nil {
 		return err
 	}
 	server := newServer(endpoint)
-	_, _ = fmt.Fprintf(stderr, "guarita: escutando em http://%s%s\n",
-		listener.Addr(), c.servers[0].path())
+	_, _ = fmt.Fprintf(stderr, "guarita: escutando em %s://%s%s\n",
+		c.scheme(), listener.Addr(), c.servers[0].path())
 	served := make(chan error, 1)
-	go func() { served <- server.Serve(listener) }()
+	go func() { served <- c.serve(server, listener) }()
 	return shutdown(ctx, server, served)
+}
+
+// #endregion
+
+// #region cmd-guarita-open-sides
+// openSides abre o que fica ao lado da escuta do agente: o catálogo e
+// a página do operador. closeAll fecha na ordem inversa.
+func openSides(
+	ctx context.Context, c config, d deciders,
+	logger *slog.Logger, stderr io.Writer,
+) (app.CatalogStore, func(), error) {
+	store, closeStore, err := openStore(ctx, c, logger)
+	if err != nil {
+		return nil, nil, err
+	}
+	stopAdmin, err := startAdmin(c.approval, d.queue, stderr)
+	if err != nil {
+		closeStore()
+		return nil, nil, err
+	}
+	return store, func() { stopAdmin(); closeStore() }, nil
 }
 
 // #endregion
@@ -163,8 +182,8 @@ func newRoute(
 	c config, server upstreamServer, d deciders,
 	store app.CatalogStore, addr string, logger *slog.Logger,
 ) (http.Handler, http.Handler, error) {
-	resource := "http://" + addr + server.path()
-	metadataURL := "http://" + addr + identity.MetadataPath
+	resource := c.scheme() + "://" + addr + server.path()
+	metadataURL := c.scheme() + "://" + addr + identity.MetadataPath
 	if server.name == "" {
 		resource = cmp.Or(c.auth.resource, resource)
 	} else {
@@ -192,6 +211,9 @@ func newAuth(
 	if c.auth.keyFile == "" {
 		if len(c.hosts) > 0 {
 			return nil, nil, errAuthRequired
+		}
+		if !c.auth.insecure {
+			return nil, nil, errNoAuth
 		}
 		logger.Warn("sem autenticação do agente; aceita só em loopback",
 			"resource", resource)

@@ -113,11 +113,13 @@ type config struct {
 	limits      limitsConfig      // modo HTTP: cotas e disjuntor
 	audit       auditConfig       // a trilha e os spans
 	digest      domain.Digest     // modo stdio: o servidor aprovado
+	tls         tlsConfig         // modo HTTP: o certificado do agente
 }
 
 // authConfig é a identidade do modo HTTP: quem emite os tokens do
 // agente, para que recurso, e a credencial da Guarita para o servidor.
 type authConfig struct {
+	insecure       bool // -insecure-no-auth: sem token, em loopback
 	keyFile        string
 	issuer         string
 	resource       string
