@@ -73,6 +73,17 @@ func WithAgent(agent func(context.Context) string) Option {
 
 var _ ToolCatalog = (*PinCatalog)(nil)
 
+// admissible valida a chamada e, só se ela for válida, consulta o
+// catálogo.
+func (uc *InterceptCall) admissible(
+	ctx context.Context, call domain.Call,
+) error {
+	if err := call.Validate(); err != nil {
+		return err
+	}
+	return uc.checkCatalog(ctx, call)
+}
+
 // checkCatalog consulta o catálogo, se houver um.
 func (uc *InterceptCall) checkCatalog(
 	ctx context.Context, call domain.Call,
@@ -96,8 +107,12 @@ type InterceptCall struct {
 	findings         FindingsObserver
 	resultInspectors []ResultInspector
 	marker           ResultMarker
+	auditor          Auditor
 }
 
+// #endregion
+
+// #region app-intercept-new
 // NewInterceptCall recebe as portas de que o caso de uso precisa. As
 // opcionais chegam por opções funcionais.
 func NewInterceptCall(
@@ -130,34 +145,45 @@ func (uc *InterceptCall) Run(
 // #endregion
 
 // #region app-intercept-authorize
-// Authorize decide a chamada sem repassá-la: nil só para allow.
+// Authorize decide a chamada sem repassá-la, e registra a decisão na
+// trilha de auditoria, se houver uma: nil só para allow.
 func (uc *InterceptCall) Authorize(
 	ctx context.Context, call domain.Call,
 ) error {
-	if err := call.Validate(); err != nil {
-		return fmt.Errorf("intercept call: %w", err)
-	}
-	if err := uc.checkCatalog(ctx, call); err != nil {
-		return fmt.Errorf("intercept call: %w", err)
+	decision, err := uc.decide(ctx, call)
+	return uc.audit(ctx, call, decision, err)
+}
+
+// #endregion
+
+// #region app-intercept-decide
+// decide é a decisão de sempre: validação, catálogo, política,
+// inspetores e, se for o caso, a aprovação. Devolve também o que a
+// política e os inspetores decidiram, para o registro.
+func (uc *InterceptCall) decide(
+	ctx context.Context, call domain.Call,
+) (domain.Decision, error) {
+	deny := domain.DecisionDeny
+	if err := uc.admissible(ctx, call); err != nil {
+		return deny, fmt.Errorf("intercept call: %w", err)
 	}
 	decision, err := uc.evaluate(ctx, call)
 	if err != nil {
-		return fmt.Errorf("intercept call: %w: %w",
+		return deny, fmt.Errorf("intercept call: %w: %w",
 			ErrPolicyFailed, err)
 	}
-	decision, err = uc.inspect(ctx, call, decision)
-	if err != nil {
-		return fmt.Errorf("intercept call: %w", err)
+	if decision, err = uc.inspect(ctx, call, decision); err != nil {
+		return deny, fmt.Errorf("intercept call: %w", err)
 	}
 	switch decision {
 	case domain.DecisionAllow:
-		return nil
+		return decision, nil
 	case domain.DecisionRequireApproval:
-		return uc.approve(ctx, call)
+		return decision, uc.approve(ctx, call)
 	case domain.DecisionDeny:
-		return ErrPolicyDenied
+		return decision, ErrPolicyDenied
 	}
-	return ErrPolicyFailed
+	return deny, ErrPolicyFailed
 }
 
 // #endregion
