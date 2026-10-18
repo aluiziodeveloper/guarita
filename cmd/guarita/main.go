@@ -22,6 +22,7 @@ import (
 const usage = "uso: guarita [-allow ferramenta,… | -policy dir] -- " +
 	"<comando do servidor MCP> [argumentos]\n" +
 	"     guarita approvals [-admin URL] -secret arquivo list|approve|deny\n" +
+	"     guarita digest <comando>\n" +
 	"     guarita [-allow … | -policy dir] [-listen endereço] [-host …] " +
 	"[-origin …] [-server nome=URL …] " +
 	"-upstream <URL do servidor MCP>"
@@ -82,6 +83,8 @@ func subcommand(args []string) (
 	switch args[0] {
 	case "approvals":
 		return runApprovals, true
+	case "digest":
+		return runDigest, true
 	case "audit":
 		return func(_ context.Context, a []string, out, e io.Writer) error {
 			return runAudit(a, out, e)
@@ -107,6 +110,7 @@ type config struct {
 	sandbox     sandboxConfig     // modo stdio: o contêiner do servidor
 	limits      limitsConfig      // modo HTTP: cotas e disjuntor
 	audit       auditConfig       // a trilha e os spans
+	digest      domain.Digest     // modo stdio: o servidor aprovado
 }
 
 // authConfig é a identidade do modo HTTP: quem emite os tokens do
