@@ -38,11 +38,13 @@ func approvalFlags(flags *flag.FlagSet, c *approvalConfig) {
 		"quanto tempo a mesma chamada negada é negada na hora")
 }
 
-// deciders são os dois que decidem uma chamada: a política e, quando
-// ela pede aprovação, uma pessoa, pela fila.
+// deciders são os que decidem: a política e, quando ela pede
+// aprovação, uma pessoa, pela fila; no caminho de volta, o
+// classificador.
 type deciders struct {
-	policy app.PolicyEvaluator
-	queue  *approval.Queue // nil sem -operators
+	policy     app.PolicyEvaluator
+	queue      *approval.Queue     // nil sem -operators
+	classifier app.ResultInspector // nil sem -classifier
 }
 
 // options devolve a opção do aprovador, se houver fila.

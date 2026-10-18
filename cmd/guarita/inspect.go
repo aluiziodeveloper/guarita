@@ -20,6 +20,7 @@ type inspectConfig struct {
 	validation bool   // argumentos contra o inputSchema; exige -catalog
 	results    bool   // revisa os resultados de tools/call
 	mark       bool   // marca os resultados como não confiáveis
+	classifier classifierConfig
 }
 
 // inspectFlags declara as opções dos inspetores.
@@ -36,17 +37,24 @@ func inspectFlags(flags *flag.FlagSet, c *inspectConfig) {
 		"barra resultados com texto oculto ou delimitadores de conversa")
 	flags.BoolVar(&c.mark, "mark-untrusted", false,
 		"marca o texto dos resultados como conteúdo não confiável")
+	classifierFlags(flags, &c.classifier)
 }
 
 // #region cmd-guarita-result-options
-// resultOptions monta a revisão do caminho de volta. Ela só existe se
-// alguma das duas opções estiver ligada: sem elas, a Guarita nem lê as
-// respostas de tools/call.
-func resultOptions(c inspectConfig) []app.Option {
+// resultOptions monta a revisão do caminho de volta. As regras vêm
+// antes do classificador: custam microssegundos, e um sinal forte
+// barra o resultado sem perguntar ao modelo. Sem nenhuma das opções,
+// a Guarita nem lê as respostas de tools/call.
+func resultOptions(
+	c inspectConfig, classifier app.ResultInspector,
+) []app.Option {
 	var options []app.Option
 	if c.results {
 		options = append(options, app.WithResultInspectors(
 			injection.New(injection.DefaultActions())))
+	}
+	if classifier != nil {
+		options = append(options, app.WithResultInspectors(classifier))
 	}
 	if c.mark {
 		options = append(options, app.WithResultMarker(untrusted.New()))

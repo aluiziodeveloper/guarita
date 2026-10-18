@@ -47,7 +47,7 @@ func serveHTTP(
 		return err
 	}
 	defer stopAdmin()
-	listener, endpoint, err := listen(c, d, store, logger)
+	listener, endpoint, err := listen(ctx, c, d, store, logger)
 	if err != nil {
 		return err
 	}
@@ -61,11 +61,17 @@ func serveHTTP(
 
 // #endregion
 
-// listen abre a escuta do agente e monta o endpoint para o endereço
-// que ela recebeu.
+// listen prepara o classificador, se houver, abre a escuta do agente
+// e monta o endpoint para o endereço que ela recebeu.
 func listen(
-	c config, d deciders, store app.CatalogStore, logger *slog.Logger,
+	ctx context.Context, c config, d deciders, store app.CatalogStore,
+	logger *slog.Logger,
 ) (net.Listener, http.Handler, error) {
+	var err error
+	d.classifier, err = newClassifier(ctx, c.inspect.classifier, logger)
+	if err != nil {
+		return nil, nil, err
+	}
 	listener, err := net.Listen("tcp", c.listen)
 	if err != nil {
 		return nil, nil, err
@@ -252,10 +258,11 @@ func newHandler(
 		options = append(options, mcphttp.WithCatalog(catalog))
 	}
 	useCase = append(useCase, inspectors(c.inspect, catalog, logger)...)
-	useCase = append(useCase, resultOptions(c.inspect)...)
+	useCase = append(useCase,
+		resultOptions(c.inspect, d.classifier)...)
 	useCase = append(useCase, d.options()...) // a fila, se houver
 	uc := app.NewInterceptCall(d.policy, nil, useCase...)
-	if c.inspect.results || c.inspect.mark { // o caminho de volta
+	if c.inspect.results || c.inspect.mark || d.classifier != nil {
 		options = append(options, mcphttp.WithResults(uc))
 	}
 	return mcphttp.NewHandler(upstream, mcpproxy.NewGate(uc), options...)
