@@ -16,8 +16,9 @@ Os servidores daqui existem só para o laboratório do livro. Eles rodam dentro 
 | `injection` | O resultado de uma busca traz texto escrito para o modelo | Revisão do resultado: sinais fortes barram, o resto chega marcado | 14 |
 | `classifier` | Injeção em prosa comum e ofuscada; o modelo local fora do ar | Classificador local medido no conjunto de referência, com prazo e plano B | 15 |
 | `pipeline` | Uma página em base64 passa pela volta, e a rota de envio, sem linha, deixa o CPF sair | Linha de inspetores por rota, com teste de camada ausente | 16 |
+| `sandbox` | Um servidor de arquivos segue um symlink para fora da raiz; uma sonda tenta escrever, conectar, ler o host, usar o chaveiro do kernel e virar root | `os.Root` no servidor e o contêiner da Guarita, sem rede, só leitura e sem privilégios | 17 |
 
-A medida do classificador (`attacks/classifier`, `TestClassificador`) exige um Ollama local e é pulada sem ele; na CI, só o teste do modelo fora do ar roda. Para medir:
+A medida do classificador (`attacks/classifier`, `TestClassificador`) exige um Ollama local e é pulada sem ele; na CI, só o teste do modelo fora do ar roda. Os testes de `attacks/sandbox` exigem um Docker local; na CI, o Docker do runner os roda. Para medir:
 
 ```sh
 docker run -d --name guarita-ollama -p 127.0.0.1:11434:11434 \
