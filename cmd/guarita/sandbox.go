@@ -18,7 +18,7 @@ var (
 
 // defenseFlags declara as opções das defesas dos Capítulos 12 a 21: a
 // aprovação, os inspetores, a sandbox, os limites, a auditoria, o
-// digest do servidor e os padrões seguros.
+// digest do servidor, os padrões seguros e a escuta de operação.
 func defenseFlags(flags *flag.FlagSet, c *config) {
 	approvalFlags(flags, &c.approval)
 	inspectFlags(flags, &c.inspect)
@@ -27,6 +27,7 @@ func defenseFlags(flags *flag.FlagSet, c *config) {
 	auditFlags(flags, &c.audit)
 	artifactFlags(flags, c)
 	secureFlags(flags, c)
+	opsFlags(flags, &c.ops)
 }
 
 // sandboxConfig põe o servidor stdio num contêiner.

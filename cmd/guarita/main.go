@@ -85,6 +85,8 @@ func subcommand(args []string) (
 		return runApprovals, true
 	case "digest":
 		return runDigest, true
+	case "health":
+		return runHealth, true
 	case "version":
 		return runVersion, true
 	case "audit":
@@ -113,6 +115,7 @@ type config struct {
 	limits      limitsConfig      // modo HTTP: cotas e disjuntor
 	audit       auditConfig       // a trilha e os spans
 	digest      domain.Digest     // modo stdio: o servidor aprovado
+	ops         opsConfig         // modo HTTP: métricas, saúde, perfis
 	tls         tlsConfig         // modo HTTP: o certificado do agente
 }
 
