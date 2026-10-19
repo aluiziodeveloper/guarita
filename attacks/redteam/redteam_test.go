@@ -2,6 +2,7 @@ package redteam
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -124,6 +125,7 @@ func TestCadeia(t *testing.T) {
 	t.Run("10 adulteração da trilha", auditMove(l))
 	t.Run("11 exposição pela operação", opsMove(l))
 	t.Run("12 injeção pelo erro", errorMove(l))
+	t.Run("13 rebinding e mensagem ambígua", edgeMove(l))
 }
 
 // #endregion
@@ -385,3 +387,53 @@ func errorMove(l *lab) func(*testing.T) {
 }
 
 // #endregion
+
+// #region attacks-redteam-edge
+// edgeMove fala com a Guarita por HTTP cru, como uma página da web ou
+// um cliente defeituoso: um Host de fora, como no rebinding do
+// Capítulo 7, e uma mensagem com a chave id repetida, como no
+// contrabando do Capítulo 6. Nenhuma das duas chega ao servidor.
+func edgeMove(l *lab) func(*testing.T) {
+	return func(t *testing.T) {
+		tok := l.sign("relatorios", "web")
+		ambiguous := `{"jsonrpc":"2.0","id":1,"id":2,` +
+			`"method":"tools/list"}`
+		for _, c := range []struct{ name, host, body string }{
+			{"Host de fora", "lab.example:80", `{"jsonrpc":"2.0",` +
+				`"id":1,"method":"tools/list"}`},
+			{"id repetido", "", ambiguous},
+		} {
+			code, body := raw(t, l.base+"/mcp/web", c.host, tok, c.body)
+			t.Logf("%-12s %d %s", c.name, code, first(body))
+			if code < 400 {
+				t.Fatalf("%s: a Guarita aceitou", c.name)
+			}
+		}
+	}
+}
+
+// #endregion
+
+// raw faz um POST com o corpo e o Host dados, e o token do agente.
+func raw(t *testing.T, url, host, tok, body string) (int, string) {
+	t.Helper()
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost,
+		url, strings.NewReader(body))
+	if host != "" {
+		req.Host = host
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set("Mcp-Method", "tools/list")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	var reply struct {
+		Error struct{ Message string }
+	}
+	_ = json.NewDecoder(res.Body).Decode(&reply)
+	return res.StatusCode, reply.Error.Message
+}
