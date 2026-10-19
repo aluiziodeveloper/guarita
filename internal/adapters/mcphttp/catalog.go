@@ -114,6 +114,9 @@ func rewriteStream(
 			if ferr != nil {
 				return nil, ferr
 			}
+			if len(filtered) == 0 { // barrada: o evento fica sem data
+				continue
+			}
 			line = "data: " + string(filtered) + "\n"
 			if isResponse(filtered) {
 				out.WriteString(line + "\n") // fecha o evento e encerra

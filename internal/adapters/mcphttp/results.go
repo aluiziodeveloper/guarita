@@ -54,8 +54,11 @@ func reviewMessage(
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", errUpstreamResponse, err)
 	}
+	if message.Kind == mcpproxy.KindNotification {
+		return reviewNotification(ctx, reviewer, call, message, data)
+	}
 	if message.Kind != mcpproxy.KindResponse {
-		return data, nil // notificações passam
+		return data, nil
 	}
 	if len(message.Error) > 0 {
 		return reviewError(ctx, reviewer, call, message)
@@ -93,6 +96,27 @@ func reviewError(
 		"message": "[Guarita] erro bloqueado: " + err.Error(),
 	})
 	return json.Marshal(message)
+}
+
+// #endregion
+
+// #region mcphttp-review-notification
+// reviewNotification passa os parâmetros de uma notificação do fluxo
+// da resposta pelos inspetores da volta. A barrada some do fluxo: a
+// saída vazia diz a rewriteStream que não escreva o evento. A limpa
+// segue como veio, sem marcação, porque não tem blocos de conteúdo.
+func reviewNotification(
+	ctx context.Context, reviewer ResultReviewer, call domain.Call,
+	message mcpproxy.Message, data []byte,
+) ([]byte, error) {
+	if len(message.Params) == 0 {
+		return data, nil
+	}
+	_, err := reviewer.ReviewResult(ctx, call, message.Params)
+	if err != nil {
+		return nil, nil //nolint:nilerr // barrar não é falhar o fluxo
+	}
+	return data, nil
 }
 
 // #endregion
