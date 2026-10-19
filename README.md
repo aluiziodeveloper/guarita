@@ -159,6 +159,21 @@ No Capítulo 11, a referência é `cap11`; `desafio/cap11` traz os testes da reg
 
 No Capítulo 12, a referência é `cap12`; `desafio/cap12` traz os testes da aprovação por dois operadores e `cap12-desafio`, a solução.
 
+Do Capítulo 13 ao 22, o esquema é o mesmo, com a referência `capNN`, os testes em `desafio/capNN` e a solução em `capNN-desafio`:
+
+| Capítulo | Desafio |
+|---:|---|
+| 13 | Cartão de crédito com o dígito de Luhn |
+| 14 | Texto alternativo de imagens no Markdown |
+| 15 | Intervalo de Wilson para a revocação medida |
+| 16 | A rota `docs` com a etapa `decoded` |
+| 17 | Escrita pelo `os.Root` |
+| 18 | `Bucket.Give`, a ficha devolvida |
+| 19 | *Checkpoint* da trilha assinado com Ed25519 |
+| 20 | `artifact.Stage` |
+| 21 | Tempo por etapa nas métricas |
+| 22 | Revisão das notificações no fluxo da resposta |
+
 ## Proxy stdio
 
 A partir do Capítulo 5, a Guarita fica entre o agente e um servidor MCP que fala pelo transporte stdio. Configure o agente para executar a Guarita no lugar do servidor, com o comando do servidor depois de `--`:
@@ -177,6 +192,8 @@ Desde o Capítulo 6, cada mensagem do agente passa por um parser estrito: uma me
 ```
 
 O que for negado ou malformado volta ao agente como erro JSON-RPC e não chega ao servidor.
+
+Desde o Capítulo 22, o stdio aplica também a linha de ida das rotas HTTP (`-dlp`, `-allow-hosts`, `-quota`, `-cost`, `-budget`, `-pipeline` e `-require-stages`) e recusa na partida as opções que não aplica, como `-inspect-results`: ele não revisa as respostas do servidor.
 
 ## Proxy HTTP
 
@@ -397,6 +414,14 @@ A partir do Capítulo 21, o modo HTTP exige identidade: sem `-agent-key`, a Guar
 - `-ops-listen` expõe `/metrics`, no formato do Prometheus, `/healthz` e `/readyz`; `-pprof` acrescenta os perfis, só no loopback.
 - `deploy/guarita.Dockerfile` é a imagem distroless; `deploy/prod/` e `deploy/k8s/` têm o Compose e o manifesto Kubernetes, cada um com o seu laboratório.
 - O guia de operação está em [`docs/operations.md`](docs/operations.md).
+
+## Red team e versão 1.0
+
+No Capítulo 22, `attacks/redteam` ataca a Guarita inteira, com tudo ligado, pela cadeia combinada dos laboratórios do livro, nos dois modos. O resultado, os achados e o risco residual estão no [relatório de segurança](docs/security-report.md); o que falta, no [*roadmap*](docs/roadmap.md); as mudanças, no [changelog](CHANGELOG.md). A 1.0.0 é publicada no dia da edição 1.0 do livro.
+
+```bash
+go test -race -count=1 -v ./attacks/redteam
+```
 
 ## Ataques de laboratório
 
