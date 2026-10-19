@@ -31,3 +31,7 @@ No modo stdio, a Guarita inicia o servidor MCP como subprocesso, com o usuário,
 - O kernel do host é compartilhado: uma falha nele atravessa o contêiner. A imagem não é verificada (Capítulo 20).
 - O modo HTTP não tem sandbox: os servidores são remotos.
 - Entre a conferência da montagem e o `docker run`, um componente do caminho pode ser trocado; a janela é curta, e quem pode trocá-lo já escreve no diretório montado.
+
+## Revisão do Capítulo 22
+
+O *red team* registrou a costura: a sandbox só existe no stdio, e o stdio não revisa respostas. Isolamento e revisão das respostas não convivem numa mesma implantação; o caminho está no *roadmap*, itens 1 e 2.

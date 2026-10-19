@@ -32,3 +32,7 @@ A política decide quem chama o quê, e a aprovação põe uma pessoa diante das
 - Dado cifrado, comprimido ou partido em várias chamadas passa por todos os detectores.
 - O transporte stdio ainda não tem inspetores.
 - As respostas dos servidores não são inspecionadas: é o Capítulo 14.
+
+## Revisão do Capítulo 22
+
+O *red team* mostrou que o modo stdio aceitava `-dlp` sem aplicá-lo. Desde a ADR 0021, o stdio monta a mesma linha de ida, e a consequência “o transporte stdio ainda não tem inspetores” deixa de valer para os argumentos.

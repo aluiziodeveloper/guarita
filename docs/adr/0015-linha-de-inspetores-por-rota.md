@@ -30,3 +30,7 @@ Até o Capítulo 15, as opções dos inspetores valiam para todas as rotas, e a 
 - Uma rota com linha própria sem `dlp` não inspeciona os argumentos, a menos que `-require-stages` a recuse.
 - O transporte stdio continua sem inspetores.
 - O teste de camada ausente cobre as etapas determinísticas; o classificador entra só nas medidas com Ollama.
+
+## Revisão do Capítulo 22
+
+A linha de ida vale também no stdio (ADR 0021), pelo mesmo registro; uma linha com etapa de volta impede a partida do stdio, e `-require-stages` passa a valer lá.

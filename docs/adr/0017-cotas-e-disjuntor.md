@@ -30,3 +30,7 @@ Um agente em laço chama a mesma ferramenta paga até alguém perceber a fatura;
 - O custo é uma estimativa por ferramenta.
 - O disjuntor conta como sucesso um erro de ferramenta devolvido com status 200.
 - O transporte stdio não tem cotas.
+
+## Revisão do Capítulo 22
+
+A cota e o orçamento de custo valem também no stdio (ADR 0021); o disjuntor continua só no repasse HTTP.

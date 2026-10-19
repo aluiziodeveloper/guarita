@@ -31,3 +31,7 @@ Os Capítulos 9 a 13 examinam o que o servidor anuncia e o que o agente manda. O
 - Blocos que não são texto, `structuredContent` e recursos embutidos não são marcados.
 - O transporte stdio não revisa respostas.
 - Cada resposta de `tools/call` é lida e reescrita, com o custo de decodificar e codificar o JSON dela.
+
+## Revisão do Capítulo 22
+
+O *red team* pôs a página de ataque na mensagem do erro JSON-RPC, que a revisão deixava passar. Desde a ADR 0021, o erro passa pelos mesmos inspetores; a marcação continua só nos blocos de texto. O stdio continua sem revisar respostas, e agora recusa as opções da volta.

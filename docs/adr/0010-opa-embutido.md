@@ -33,3 +33,7 @@ A Guarita já sabe, desde os Capítulos 8 e 10, quem é o agente e em que servid
 - O agente continua vendo em `tools/list` as ferramentas que não pode chamar; esconder a lista por agente fica para depois.
 - No transporte stdio não há agente; só concessões para o agente vazio valem lá.
 - Mudar uma permissão é um commit em `policies/`, revisado e testado, e reiniciar a Guarita; não há recarga em execução.
+
+## Revisão do Capítulo 22
+
+A Guarita passou a embutir o OPA v1.21.2 (atualização pelo Dependabot, D31), e a CI roda `opa test` com a mesma versão. As regras e os testes em Rego não mudaram.
