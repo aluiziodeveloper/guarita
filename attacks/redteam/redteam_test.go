@@ -2,6 +2,7 @@ package redteam
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -122,6 +123,7 @@ func TestCadeia(t *testing.T) {
 	t.Run("9 credencial de outra rota", credentialMove(l))
 	t.Run("10 adulteração da trilha", auditMove(l))
 	t.Run("11 exposição pela operação", opsMove(l))
+	t.Run("12 injeção pelo erro", errorMove(l))
 }
 
 // #endregion
@@ -361,3 +363,25 @@ func get(t *testing.T, url string) (string, int) {
 	body, _ := io.ReadAll(res.Body)
 	return string(body), res.StatusCode
 }
+
+// #region attacks-redteam-error
+// errorMove pede o status a um servidor que responde com um erro
+// JSON-RPC, e não com um resultado: a mensagem do erro é a página de
+// ataque. Ela não pode chegar ao agente como veio.
+func errorMove(l *lab) func(*testing.T) {
+	return func(t *testing.T) {
+		s := l.as(t, "relatorios", "status")
+		_, err := s.CallTool(t.Context(), &mcp.CallToolParams{
+			Name: "check_status", Arguments: map[string]any{},
+		})
+		msg := fmt.Sprint(err)
+		reached := strings.Contains(msg, "[LAB]")
+		t.Logf("o texto da página chega pelo erro? %v: %s", reached,
+			first(msg))
+		if reached {
+			t.Fatal("a ordem chegou ao agente pelo erro JSON-RPC")
+		}
+	}
+}
+
+// #endregion

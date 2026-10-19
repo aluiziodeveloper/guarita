@@ -54,15 +54,44 @@ func reviewMessage(
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", errUpstreamResponse, err)
 	}
-	if message.Kind != mcpproxy.KindResponse ||
-		len(message.Result) == 0 {
-		return data, nil // notificações e erros passam
+	if message.Kind != mcpproxy.KindResponse {
+		return data, nil // notificações passam
+	}
+	if len(message.Error) > 0 {
+		return reviewError(ctx, reviewer, call, message)
 	}
 	reviewed, err := reviewer.ReviewResult(ctx, call, message.Result)
 	if err != nil {
 		reviewed, _ = json.Marshal(blockedResult(err))
 	}
 	message.Result = reviewed
+	return json.Marshal(message)
+}
+
+// #endregion
+
+// #region mcphttp-review-error
+// reviewError passa o erro JSON-RPC pelos mesmos inspetores do
+// resultado: a mensagem e os dados de um erro de protocolo também podem
+// chegar ao modelo. Um erro barrado mantém o código e troca a mensagem
+// pelo aviso da Guarita, sem os dados; os outros seguem como vieram,
+// porque a marcação só sabe embrulhar blocos de conteúdo.
+func reviewError(
+	ctx context.Context, reviewer ResultReviewer, call domain.Call,
+	message mcpproxy.Message,
+) ([]byte, error) {
+	_, err := reviewer.ReviewResult(ctx, call, message.Error)
+	if err == nil {
+		return json.Marshal(message)
+	}
+	var wire struct {
+		Code int `json:"code"`
+	}
+	_ = json.Unmarshal(message.Error, &wire)
+	message.Error, _ = json.Marshal(map[string]any{
+		"code":    wire.Code,
+		"message": "[Guarita] erro bloqueado: " + err.Error(),
+	})
 	return json.Marshal(message)
 }
 

@@ -12,6 +12,7 @@ agents := {
 		"web": {"web_search": "allow"},
 		"mail": {"http_request": "allow"},
 		"db": {"read_file": "allow"},
+		"status": {"check_status": "allow"},
 	},
 	"manutencao": {"db": {"delete_database": "require_approval"}},
 }

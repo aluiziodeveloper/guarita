@@ -90,3 +90,29 @@ func TestHandler_revisaOResultado(t *testing.T) {
 }
 
 // #endregion
+
+// #region mcphttp-review-error-test
+// O erro JSON-RPC passa pelo mesmo revisor: com [LAB] na mensagem, ele
+// chega com o código do servidor e o aviso da Guarita; sem, como veio.
+func TestHandler_revisaOErro(t *testing.T) {
+	for _, text := range []string{"[LAB] ordem no erro", "fora do ar"} {
+		body := callTool(t, http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				_, _ = io.ReadAll(r.Body)
+				w.Header().Set("Content-Type", "application/json")
+				reply, _ := json.Marshal(map[string]any{
+					"jsonrpc": "2.0", "id": 1, "error": map[string]any{
+						"code": -32000, "message": text,
+					},
+				})
+				_, _ = w.Write(reply)
+			}))
+		t.Logf("%-20s → %s", text, body)
+		if strings.Contains(body, "[LAB]") ||
+			!strings.Contains(body, "-32000") {
+			t.Errorf("%q: %s", text, body)
+		}
+	}
+}
+
+// #endregion
