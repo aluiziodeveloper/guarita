@@ -15,7 +15,6 @@ import (
 
 	"github.com/aluiziodeveloper/guarita/internal/adapters/mcphttp"
 	"github.com/aluiziodeveloper/guarita/internal/adapters/mcpproxy"
-	"github.com/aluiziodeveloper/guarita/internal/app"
 	"github.com/aluiziodeveloper/guarita/internal/domain"
 )
 
@@ -66,8 +65,11 @@ func run(
 		return serveHTTP(ctx, config, d, stderr)
 	}
 	// Os dois transportes só usam Authorize: o repasse fica com eles.
-	gate := mcpproxy.NewGate(app.NewInterceptCall(d.policy, nil,
-		d.audited()...))
+	uc, err := stdioUseCase(config, d, stderr)
+	if err != nil {
+		return err
+	}
+	gate := mcpproxy.NewGate(uc)
 	return serveStdio(ctx, config.stdio(), gate, stdin, stdout, stderr)
 }
 
@@ -109,10 +111,10 @@ type config struct {
 	auth        authConfig
 	catalogFile string            // modo HTTP: o catálogo em SQLite
 	approval    approvalConfig    // modo HTTP: a aprovação humana
-	inspect     inspectConfig     // modo HTTP: os inspetores
+	inspect     inspectConfig     // os inspetores; no stdio, só a ida
 	credentials map[string]string // -server-credential, por namespace
 	sandbox     sandboxConfig     // modo stdio: o contêiner do servidor
-	limits      limitsConfig      // modo HTTP: cotas e disjuntor
+	limits      limitsConfig      // cotas; o disjuntor só no HTTP
 	audit       auditConfig       // a trilha e os spans
 	digest      domain.Digest     // modo stdio: o servidor aprovado
 	ops         opsConfig         // modo HTTP: métricas, saúde, perfis
@@ -151,9 +153,13 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	if err := c.resolveServers(*upstream); err != nil {
 		return config{}, err
 	}
-	if (len(c.servers) == 0) == (len(command) == 0) ||
-		(c.catalogFile != "" && len(c.servers) == 0) {
+	if (len(c.servers) == 0) == (len(command) == 0) {
 		return config{}, errUsage
+	}
+	if len(c.servers) == 0 {
+		if err := checkStdioFlags(flags); err != nil {
+			return config{}, errors.Join(err, errUsage)
+		}
 	}
 	c.allow = list(*allow)
 	c.hosts, c.origins = list(*hosts), list(*origins)

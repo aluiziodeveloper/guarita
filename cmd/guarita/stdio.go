@@ -3,14 +3,84 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os/exec"
+	"slices"
+	"strings"
 
 	"github.com/aluiziodeveloper/guarita/internal/adapters/mcpproxy"
 	"github.com/aluiziodeveloper/guarita/internal/adapters/sandbox"
+	"github.com/aluiziodeveloper/guarita/internal/app"
 	"github.com/aluiziodeveloper/guarita/internal/domain"
 )
+
+var (
+	errStdioFlag    = errors.New("option needs the HTTP mode (-server)")
+	errStdioResults = errors.New(
+		"stdio does not review results; the line reads them")
+)
+
+// #region cmd-guarita-stdio-flags
+// stdioFlags são as opções que o modo stdio aplica: a política, a
+// trilha, a sandbox, o digest e a linha de ida. É uma lista de
+// permissão: uma opção nova fica de fora até alguém a ligar aqui.
+var stdioFlags = []string{
+	"allow", "policy", "audit", "audit-key",
+	"sandbox", "sandbox-mount", "server-digest",
+	"dlp", "dlp-entropy", "allow-hosts",
+	"quota", "cost", "budget", "pipeline", "require-stages",
+}
+
+// checkStdioFlags recusa, no modo stdio, as opções escritas que ele não
+// aplicaria. Visit só passa pelas opções que a linha de comando deu.
+func checkStdioFlags(flags *flag.FlagSet) error {
+	var refused []string
+	flags.Visit(func(f *flag.Flag) {
+		if !slices.Contains(stdioFlags, f.Name) {
+			refused = append(refused, "-"+f.Name)
+		}
+	})
+	if len(refused) > 0 {
+		return fmt.Errorf("%w: %s", errStdioFlag,
+			strings.Join(refused, " "))
+	}
+	return nil
+}
+
+// #endregion
+
+// #region cmd-guarita-stdio-use-case
+// stdioUseCase monta o caso de uso do modo stdio com a linha de ida das
+// rotas HTTP: DLP, destinos e cota. A volta não: o repasse do stdio não
+// abre as respostas, e uma etapa de volta impede a partida.
+func stdioUseCase(
+	c config, d deciders, stderr io.Writer,
+) (*app.InterceptCall, error) {
+	if err := c.checkRoutes(); err != nil {
+		return nil, err
+	}
+	var err error
+	if d.quota, err = c.limits.newQuota(); err != nil {
+		return nil, err
+	}
+	logger := newLogger(stderr)
+	line, err := routeLine(c.inspect, "", nil, d, logger)
+	if err != nil {
+		return nil, err
+	}
+	if line.ReadsResults() {
+		return nil, fmt.Errorf("%w: %s", errStdioResults,
+			strings.Join(line.Names, ","))
+	}
+	options := append(line.Options(),
+		app.WithFindings(logFindings(logger)))
+	options = append(options, d.audited()...)
+	return app.NewInterceptCall(d.policy, nil, options...), nil
+}
+
+// #endregion
 
 // stdioServer é o servidor do modo stdio: o comando e, se houver, a
 // sandbox em que ele roda.
