@@ -11,4 +11,5 @@ O que a Guarita ainda não faz, na ordem em que fecharia mais risco residual do 
 7. **Cotas compartilhadas.** Baldes num armazenamento comum, para várias Guaritas e reinícios; limite de chamadas simultâneas por agente.
 8. **Aprovação do catálogo e da operação.** Aprovar uma definição antes do primeiro uso, no lugar da confiança no primeiro uso; *webhooks* para a fila de aprovação.
 9. **Endurecimento do contêiner.** Perfil seccomp próprio; lista de destinos de saída para servidores que precisam de rede.
-10. **A versão 1.0.0.** *Release* assinada com registro público de transparência, publicada no dia da edição 1.0 do livro, depois da revisão técnica externa e da reprodução em máquina distinta.
+10. **Lacunas da revisão editorial.** Procurar CPF e chaves também numa cópia dos argumentos normalizada com NFKC; sobrepor os pedaços do classificador, para que uma frase curta caiba inteira em algum deles; um disjuntor por agente e servidor, ou que só abra com falhas de mais de um agente.
+11. **A versão 1.0.0.** *Release* assinada com registro público de transparência, publicada no dia da edição 1.0 do livro, depois da revisão técnica externa e da reprodução em máquina distinta.

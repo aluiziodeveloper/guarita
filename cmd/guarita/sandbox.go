@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"os"
 	"strings"
 
@@ -14,6 +15,8 @@ var (
 		"-sandbox-mount must be source:target or source:target:rw")
 	errSandboxMode = errors.New(
 		"-sandbox is for a stdio server, after --; HTTP servers are remote")
+	errSandboxHome = errors.New(
+		"-sandbox-mount needs a home directory (HOME) to check mounts")
 )
 
 // defenseFlags declara as opções das defesas dos Capítulos 12 a 21: a
@@ -66,7 +69,13 @@ func (c sandboxConfig) profile() (*sandbox.Profile, error) {
 	if c.image == "" {
 		return nil, nil
 	}
-	home, _ := os.UserHomeDir()
+	// Sem a home, CheckMount não saberia onde ficam .ssh, .aws e as
+	// outras pastas de credenciais, nem recusaria a home inteira: com
+	// montagens, a partida é recusada.
+	home, err := os.UserHomeDir()
+	if err != nil && len(c.mounts) > 0 {
+		return nil, fmt.Errorf("%w: %w", errSandboxHome, err)
+	}
 	p := sandbox.Default(c.image)
 	for _, m := range c.mounts {
 		checked, err := sandbox.CheckMount(m, home)

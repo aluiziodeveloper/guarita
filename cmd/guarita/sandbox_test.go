@@ -68,3 +68,21 @@ func TestSandbox_perfil(t *testing.T) {
 		t.Error("sem -sandbox, não há perfil")
 	}
 }
+
+// Sem HOME, a Guarita não sabe onde ficam as pastas de credenciais, e
+// uma montagem passaria sem a conferência delas: a partida é recusada.
+// Sem montagens, não há o que conferir, e a sandbox sobe.
+func TestSandbox_semHome(t *testing.T) {
+	data := t.TempDir()
+	t.Setenv("HOME", "")
+	_, err := sandboxProfile("-sandbox", "img",
+		"-sandbox-mount", data+":/data", "--", "/srv")
+	t.Logf("com montagem: %v", err)
+	if !errors.Is(err, errSandboxHome) {
+		t.Errorf("quer %v, veio %v", errSandboxHome, err)
+	}
+	_, err = sandboxProfile("-sandbox", "img", "--", "/srv")
+	if err != nil {
+		t.Errorf("sem montagem: %v", err)
+	}
+}

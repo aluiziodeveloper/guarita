@@ -38,7 +38,8 @@ func (w *wire) reset() {
 func (w *wire) flush() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	for line := range strings.SplitSeq(strings.TrimSpace(w.buf.String()), "\n") {
+	lines := strings.Split(strings.TrimSpace(w.buf.String()), "\n")
+	for _, line := range inOrder(lines) {
 		dir, msg, _ := strings.Cut(line, ": ")
 		var out bytes.Buffer
 		if err := json.Indent(&out, []byte(msg), "", "  "); err != nil {
@@ -51,6 +52,40 @@ func (w *wire) flush() {
 		fmt.Printf("%s\n%s\n", arrow, out.String())
 	}
 	w.buf.Reset()
+}
+
+// inOrder põe cada pedido antes da resposta dele. O LoggingTransport
+// registra uma escrita depois de entregá-la, e a goroutine que lê pode
+// registrar a resposta antes: sem isto, a ordem do registro variava de
+// uma execução para outra.
+func inOrder(lines []string) []string {
+	idOf := func(line string) (string, bool) {
+		_, msg, _ := strings.Cut(line, ": ")
+		var m struct{ ID json.RawMessage }
+		if json.Unmarshal([]byte(msg), &m) != nil || m.ID == nil {
+			return "", false
+		}
+		return string(m.ID), true
+	}
+	out := make([]string, 0, len(lines))
+	moved := make([]bool, len(lines))
+	for i, line := range lines {
+		if moved[i] {
+			continue
+		}
+		if id, ok := idOf(line); ok && strings.HasPrefix(line, "read") {
+			for j := i + 1; j < len(lines); j++ {
+				other, same := idOf(lines[j])
+				if same && other == id &&
+					strings.HasPrefix(lines[j], "write") {
+					out, moved[j] = append(out, lines[j]), true
+					break
+				}
+			}
+		}
+		out = append(out, line)
+	}
+	return out
 }
 
 type readArgs struct {
